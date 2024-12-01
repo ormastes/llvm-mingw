@@ -68,7 +68,7 @@ for i in amdgpu-arch bugpoint c-index-test clang-* clangd clangd-* darwin-debug 
     case $basename in
     *.sh)
         ;;
-    clang++|clang-*.*|clang-cpp)
+    clang++|clang-*.*|clang-cpp|clang-repl|clang-cl)
         ;;
     clang-format|git-clang-format)
         ;;
