@@ -16,7 +16,7 @@
 
 set -e
 
-: ${LLVM_VERSION:=llvmorg-18.1.8}
+: ${LLVM_VERSION:=private/ormastes_current}
 ASSERTS=OFF
 unset HOST
 BUILDDIR="build"
@@ -86,7 +86,7 @@ if [ ! -d llvm-project ]; then
     mkdir llvm-project
     cd llvm-project
     git init
-    git remote add origin https://github.com/llvm/llvm-project.git
+    git remote add origin https://github.com/ormastes/llvm-project.git
     cd ..
     CHECKOUT=1
 fi
