@@ -74,6 +74,8 @@ int _tmain(int argc, TCHAR* argv[]) {
         // SEH is the default for armv7.
     } else if (!_tcscmp(arch, _T("aarch64"))) {
         // SEH is the default for aarch64.
+    }else if (!_tcscmp(arch, _T("riscv32"))) {
+        
     }
 
     if (target_os && !_tcscmp(target_os, _T("mingw32uwp"))) {
@@ -91,8 +93,11 @@ int _tmain(int argc, TCHAR* argv[]) {
     exec_argv[arg++] = _T("-target");
     exec_argv[arg++] = target;
     exec_argv[arg++] = _T("-rtlib=compiler-rt");
-    exec_argv[arg++] = _T("-unwindlib=libunwind");
-    exec_argv[arg++] = _T("-stdlib=libc++");
+    if (target_os && !_tcscmp(target_os, _T("elf"))) {
+    } else {
+        exec_argv[arg++] = _T("-unwindlib=libunwind");
+        exec_argv[arg++] = _T("-stdlib=libc++");
+    }
     exec_argv[arg++] = _T("-fuse-ld=lld");
     exec_argv[arg++] = _T("--end-no-unused-arguments");
 

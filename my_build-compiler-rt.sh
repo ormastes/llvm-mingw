@@ -55,13 +55,17 @@ fi
 
 mkdir -p "$PREFIX"
 PREFIX="$(cd "$PREFIX" && pwd)"
-NATIVE_PREFIX=$PREFIX
-export PATH="$PREFIX/bin:$PATH"
+export PATH="$NATIVE_PREFIX/bin:$PATH"
 
-: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64 riscv32}}
+: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 armv7 riscv32}}
 
 ANY_ARCH=$(echo $ARCHS | awk '{print $1}')
-CLANG_RESOURCE_DIR="$("$PREFIX/bin/$ANY_ARCH-w64-mingw32-clang" --print-resource-dir)"
+NATIVE_PREFIX=/opt/llvm-mingw
+NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
+CLANG_RESOURCE_DIR="$("$NATIVE_PREFIX/bin/$ANY_ARCH-w64-mingw32-clang" --print-resource-dir)"
+SUFFIX="${CLANG_RESOURCE_DIR#"$NATIVE_PREFIX"}"
+CLANG_RESOURCE_DIR="$PREFIX$SUFFIX"
+echo "$CLANG_RESOURCE_DIR"
 
 if [ ! -d llvm-project/compiler-rt ] || [ -n "$SYNC" ]; then
     CHECKOUT_ONLY=1 ./build-llvm.sh

@@ -315,15 +315,18 @@ cmake \
     ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_PROFDATA_FILE=/build/profdata.prof \
     -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
     -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
-    -DLLVM_TARGETS_TO_BUILD="ARM;AArch64;X86;RISCV;NVPTX" \
+    -DLLVM_TARGETS_TO_BUILD="ARM;X86;RISCV" \
     -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
     -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
-    -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
     ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
     $CMAKEFLAGS \
     ..
+
+# llvm-profdata merge -output=C:/dev/llvm_pgo_profile/pgo_gen/profdata.prof C:/dev/llvm_pgo_profile/*.profraw
+# -DLLVM_PROFDATA_FILE=/build/profdata.prof
 
 cmake --build . ${CORES:+-j${CORES}}
 cmake --install . --strip
