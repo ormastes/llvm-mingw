@@ -50,6 +50,12 @@ if [ "$1" = "-f" ]; then
                 # string (or some of the others) in order to accept it.
                 format=pe-arm-wince
                 ;;
+            ELF32-RISCV*)
+                format=elf32-littleriscv
+                ;;
+            ELF64-RISCV*)
+                format=elf64-littleriscv
+                ;;
             esac
             echo $file: file format $format
             ;;
