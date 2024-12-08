@@ -17,7 +17,7 @@ WORKDIR /build
 
 ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 
-ARG TOOLCHAIN_ARCHS="i686 x86_64 armv7 aarch64 riscv32"
+ARG TOOLCHAIN_ARCHS="i686 x86_64 armv7 aarch64"
 
 ARG DEFAULT_CRT=ucrt
 
@@ -38,6 +38,8 @@ RUN ./build-mingw-w64-libraries.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 RUN ./build-compiler-rt.sh $TOOLCHAIN_PREFIX --build-sanitizers 
 RUN ./build-openmp.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 
-RUN rm -rf /build/*
+#RUN rm -rf /build/*
 
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$PATH
+
+
