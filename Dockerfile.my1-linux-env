@@ -1,0 +1,56 @@
+FROM llvm-mingw:latest
+
+RUN dpkg --add-architecture i386
+RUN apt-get update -qq && \
+    DEBIAN_FRONTEND="noninteractive" apt-get install -qqy --no-install-recommends \
+    libc6-dev-i386 linux-libc-dev:i386 tmux
+
+
+WORKDIR /build
+COPY *.sh ./
+COPY wrappers/*.sh wrappers/*.c wrappers/*.h ./wrappers/
+
+ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
+
+ARG TOOLCHAIN_ARCHS="riscv32 i686 x86_64 armv7 aarch64"
+
+ARG DEFAULT_CRT=ucrt
+
+#ARG CFGUARD_ARGS=--enable-cfguard for windows
+ENV HOST_ARG=--host=x86_64-linux-gnu
+
+ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64"
+
+#RUN ./build-mingw-w64.sh $TOOLCHAIN_PREFIX --with-default-msvcrt=$DEFAULT_CRT 
+#RUN ./build-mingw-w64-tools.sh $TOOLCHAIN_PREFIX
+RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX --disable-cfguard $HOST_ARG
+RUN ./my_build-libcxx.sh $TOOLCHAIN_PREFIX --disable-cfguard $HOST_ARG
+#RUN ./build-mingw-w64-libraries.sh $TOOLCHAIN_PREFIX 
+
+
+#COPY my_build_mimalloc.sh ./
+#RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX  --host=x86_64-w64-mingw32 
+#RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX 
+
+
+RUN ./my_build-llvm.sh $TOOLCHAIN_PREFIX $HOST_ARG
+
+RUN ./build-lldb-mi.sh $TOOLCHAIN_PREFIX
+RUN ./strip-llvm.sh $TOOLCHAIN_PREFIX 
+RUN ./install-wrappers.sh $TOOLCHAIN_PREFIX 
+
+ARG TOOLCHAIN_ARCHS="riscv32"
+COPY my_build-compiler-rt.sh ./
+RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX  $HOST_ARG
+
+ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64
+RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX --disable-cfguard $HOST_ARG --build-sanitizers 
+#RUN ./build-openmp.sh $TOOLCHAIN_PREFIX 
+
+
+
+
+
+
+
+

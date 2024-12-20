@@ -1,0 +1,155 @@
+#!/bin/sh
+#
+# Copyright (c) 2018 Martin Storsjo
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+set -e
+
+BUILD_STATIC=ON
+BUILD_SHARED=ON
+CFGUARD_CFLAGS="-mguard=cf"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --disable-shared)
+        BUILD_SHARED=OFF
+        ;;
+    --enable-shared)
+        BUILD_SHARED=ON
+        ;;
+    --disable-static)
+        BUILD_STATIC=OFF
+        ;;
+    --enable-static)
+        BUILD_STATIC=ON
+        ;;
+    --enable-cfguard)
+        CFGUARD_CFLAGS="-mguard=cf"
+        ENABLE_CFGUARD=1
+        ;;
+    --disable-cfguard)
+        CFGUARD_CFLAGS=
+        ENABLE_CFGUARD=
+        ;;
+    --host=*)
+        HOST="${1#*=}"
+        ;;
+    *)
+        PREFIX="$1"
+        ;;
+    esac
+    shift
+done
+if [ -z "$PREFIX" ]; then
+    echo "$0 [--disable-shared] [--disable-static] [--enable-cfguard|--disable-cfguard] dest"
+    exit 1
+fi
+if [ -n "$HOST" ]; then
+    case $HOST in
+    *-mingw32)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+else
+    case $(uname) in
+    MINGW*)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+fi
+
+mkdir -p "$PREFIX"
+PREFIX="$(cd "$PREFIX" && pwd)"
+
+export PATH="$PREFIX/bin:$PATH"
+
+: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64}}
+
+if [ ! -d llvm-project/libunwind ] || [ -n "$SYNC" ]; then
+    CHECKOUT_ONLY=1 ./build-llvm.sh
+fi
+
+cd llvm-project
+
+LLVM_PATH="$(pwd)/llvm"
+
+cd runtimes
+
+if command -v ninja >/dev/null; then
+    CMAKE_GENERATOR="Ninja"
+else
+    : ${CORES:=$(nproc 2>/dev/null)}
+    : ${CORES:=$(sysctl -n hw.ncpu 2>/dev/null)}
+    : ${CORES:=4}
+
+    case $(uname) in
+    MINGW*)
+        CMAKE_GENERATOR="MSYS Makefiles"
+        ;;
+    esac
+fi
+
+for arch in $ARCHS; do
+    if [ -n "$TARGET_WINDOWS" ]; then
+        toolchain=$arch-w64-mingw32
+        OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Windows"
+        COMPILER_TARGET="$arch-w64-windows-gnu"
+    else
+        toolchain=$arch-linux-gnu
+        OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Linux"
+        COMPILER_TARGET="$arch-linux-gnu"
+    fi
+    [ -z "$CLEAN" ] || rm -rf build-$arch
+    mkdir -p build-$arch
+    cd build-$arch
+    [ -n "$NO_RECONF" ] || rm -rf CMake*
+    cmake \
+        ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX/$toolchain" \
+        -DCMAKE_C_COMPILER=$toolchain-clang \
+        -DCMAKE_CXX_COMPILER=$toolchain-clang++ \
+        -DCMAKE_CXX_COMPILER_TARGET=$COMPILER_TARGET\
+        ${OPTIONNAL_FLAGS} \
+        -DCMAKE_C_COMPILER_WORKS=TRUE \
+        -DCMAKE_CXX_COMPILER_WORKS=TRUE \
+        -DLLVM_PATH="$LLVM_PATH" \
+        -DCMAKE_AR="$PREFIX/bin/llvm-ar" \
+        -DCMAKE_RANLIB="$PREFIX/bin/llvm-ranlib" \
+        -DLLVM_ENABLE_RUNTIMES="libunwind;libcxxabi;libcxx" \
+        -DLIBUNWIND_USE_COMPILER_RT=TRUE \
+        -DLIBUNWIND_ENABLE_SHARED=$BUILD_SHARED \
+        -DLIBUNWIND_ENABLE_STATIC=$BUILD_STATIC \
+        -DLIBCXX_USE_COMPILER_RT=ON \
+        -DLIBCXX_ENABLE_SHARED=$BUILD_SHARED \
+        -DLIBCXX_ENABLE_STATIC=$BUILD_STATIC \
+        -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=TRUE \
+        -DLIBCXX_CXX_ABI=libcxxabi \
+        -DLIBCXX_LIBDIR_SUFFIX="" \
+        -DLIBCXX_INCLUDE_TESTS=FALSE \
+        -DLIBCXX_INSTALL_MODULES=ON \
+        -DLIBCXX_INSTALL_MODULES_DIR="$PREFIX/share/libc++/v1" \
+        -DLIBCXX_ENABLE_ABI_LINKER_SCRIPT=FALSE \
+        -DLIBCXXABI_USE_COMPILER_RT=ON \
+        -DLIBCXXABI_USE_LLVM_UNWINDER=ON \
+        -DLIBCXXABI_ENABLE_SHARED=OFF \
+        -DLIBCXXABI_LIBDIR_SUFFIX="" \
+        -DCMAKE_C_FLAGS_INIT="$CFGUARD_CFLAGS" \
+        -DCMAKE_CXX_FLAGS_INIT="$CFGUARD_CFLAGS" \
+        ..
+
+    cmake --build . ${CORES:+-j${CORES}}
+    cmake --install .
+    cd ..
+done
