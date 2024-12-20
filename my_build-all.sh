@@ -66,6 +66,8 @@ while [ $# -gt 0 ]; do
         ;;
     --host=*)
         HOST_ARGS="$HOST_ARGS $1"
+        # HOST_ARGS to  chars take after '='
+        HOST_NAME=${HOST_ARGS#*=}
         ;;
     --no-tools)
         NO_TOOLS=1
@@ -123,7 +125,7 @@ if [ -n "$WIPE_RUNTIMES" ]; then
     #
     # This roughly matches the setup as if --no-runtimes had been passed,
     # except that compiler-rt headers are left installed in lib/clang/*/include.
-    rm -rf $PREFIX/*-w64-mingw32 $PREFIX/lib/clang/*/lib
+    rm -rf $PREFIX/*-w64-mingw32 $PREFIX/*-linux-gnu $PREFIX/*-unknown-elf $PREFIX/lib/clang/*/lib
 fi
 if [ -n "$CLEAN_RUNTIMES" ]; then
     export CLEAN=1
@@ -134,3 +136,4 @@ fi
 ./build-mingw-w64-libraries.sh $PREFIX $CFGUARD_ARGS
 ./my_build-compiler-rt.sh $PREFIX --build-sanitizers # CFGUARD_ARGS intentionally omitted
 ./build-openmp.sh $PREFIX $CFGUARD_ARGS
+./my_build_mimalloc.sh $PREFIX $CFGUARD_ARGS

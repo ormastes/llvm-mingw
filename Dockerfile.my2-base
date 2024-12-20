@@ -1,0 +1,17 @@
+FROM llvm-mingw-my1-linux-envt:latest
+
+WORKDIR /build
+COPY *.sh ./
+COPY wrappers/*.sh wrappers/*.c wrappers/*.h ./wrappers/
+
+RUN ./my_build-all.sh build/Windows --host=x86_64-w64-mingw32
+RUN ./my_build-all.sh build/Linux 
+
+RUN ./my_build-all.sh build/WindowsStatic --host=x86_64-w64-mingw32 --disable-dylib 
+RUN ./my_build-all.sh build/LinuxStatic --disable-dylib 
+
+RUN ./my_build-all.sh build/Windows32 --host=x86_64-w64-mingw32 
+RUN ./my_build-all.sh build/Linux32 
+
+
+

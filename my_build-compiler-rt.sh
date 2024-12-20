@@ -23,7 +23,8 @@ ENABLE_CFGUARD=1
 CFGUARD_CFLAGS="-mguard=cf"
 
 while [ $# -gt 0 ]; do
-    if [ "$1" = "--build-sanitizers" ]; then
+    case "$1" in
+    --build-sanitizers)
         SRC_DIR=..
         BUILD_SUFFIX=-sanitizers
         SANITIZERS=1
@@ -34,23 +35,45 @@ while [ $# -gt 0 ]; do
         # really intended/supported anyway).
         CFGUARD_CFLAGS=
         ENABLE_CFGUARD=
-    elif [ "$1" = "--enable-cfguard" ]; then
+        ;;
+    --enable-cfguard)
         CFGUARD_CFLAGS="-mguard=cf"
         ENABLE_CFGUARD=1
-    elif [ "$1" = "--disable-cfguard" ]; then
+        ;;
+    --disable-cfguard)
         CFGUARD_CFLAGS=
         ENABLE_CFGUARD=
-    else
+        ;;
+    --host=*)
+        HOST="${1#*=}"
+        ;;
+    *)
         PREFIX="$1"
-    fi
+        ;;
+    esac
     shift
 done
+
 if [ -z "$PREFIX" ]; then
     echo "$0 [--build-sanitizers] [--enable-cfguard|--disable-cfguard] dest"
     exit 1
 fi
 if [ -n "$SANITIZERS" ] && [ -n "$ENABLE_CFGUARD" ]; then
     echo "warning: Sanitizers may not work correctly with Control Flow Guard enabled." 1>&2
+fi
+
+if [ -n "$HOST" ]; then
+    case $HOST in
+    *-mingw32)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+else
+    case $(uname) in
+    MINGW*)
+        TARGET_WINDOWS=1
+        ;;
+    esac
 fi
 
 mkdir -p "$PREFIX"
@@ -65,7 +88,8 @@ NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
 CLANG_RESOURCE_DIR="$("$NATIVE_PREFIX/bin/$ANY_ARCH-w64-mingw32-clang" --print-resource-dir)"
 SUFFIX="${CLANG_RESOURCE_DIR#"$NATIVE_PREFIX"}"
 CLANG_RESOURCE_DIR="$PREFIX$SUFFIX"
-echo "$CLANG_RESOURCE_DIR"
+echo "Resource dir:$CLANG_RESOURCE_DIR"
+
 
 if [ ! -d llvm-project/compiler-rt ] || [ -n "$SYNC" ]; then
     CHECKOUT_ONLY=1 ./build-llvm.sh
@@ -91,10 +115,23 @@ WORKDIR=$(mktemp -d); trap "rm -rf $WORKDIR" 0
 
 for arch in $ARCHS; do
     if [ "$arch" = "riscv32" ]; then
+        toolchain=$arch-unknown-elf
+        CMAKE_SYSTEM_NAME=generic
         OPTIONNAL_FLAGS="-DCOMPILER_RT_BAREMETAL_BUILD=ON -DCOMPILER_RT_BUILD_BUILTINS=ON -DCOMPILER_RT_BUILD_LIBFUZZER=OFF -DCOMPILER_RT_BUILD_MEMPROF=OFF -DCOMPILER_RT_BUILD_PROFILE=OFF -DCOMPILER_RT_BUILD_SANITIZERS=OFF -DCOMPILER_RT_BUILD_XRAY=OFF"
-        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=riscv32 -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/riscv32-w64-elf -DCMAKE_CXX_COMPILER=riscv32-w64-elf-clang -DCMAKE_ASM_COMPILER=riscv32-w64-elf-clang -DCMAKE_C_COMPILER=riscv32-w64-elf-clang -DCMAKE_C_COMPILER_TARGET=riscv32-w64-elf -DCMAKE_C_COMPILER=riscv32-w64-elf-clang -DCMAKE_CXX_COMPILER=riscv32-w64-elf-clang++ -DCMAKE_C_FLAGS=\"--target=riscv32-w64-elf\" -DCMAKE_CXX_FLAGS=\"--target=riscv32-w64-elf\" -DCMAKE_ASM_FLAGS=\"--target=riscv32-w64-elf\""
+        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=riscv32 -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/riscv32-unknown-elf -DCMAKE_CXX_COMPILER=riscv32-unknown-elf-clang -DCMAKE_ASM_COMPILER=riscv32-unknown-elf-clang -DCMAKE_C_COMPILER=riscv32-unknown-elf-clang -DCMAKE_C_COMPILER_TARGET=riscv32-unknown-elf -DCMAKE_C_COMPILER=riscv32-unknown-elf-clang -DCMAKE_CXX_COMPILER=riscv32-unknown-elf-clang++ -DCMAKE_C_FLAGS=\"--target=riscv32-unknown-elf\" -DCMAKE_CXX_FLAGS=\"--target=riscv32-unknown-elf\" -DCMAKE_ASM_FLAGS=\"--target=riscv32-unknown-elf\""
     else
-        OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Windows -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$arch-w64-mingw32 -DCMAKE_C_COMPILER_TARGET=$arch-w64-windows-gnu -DCMAKE_C_COMPILER=$arch-w64-mingw32-clang -DCMAKE_CXX_COMPILER=$arch-w64-mingw32-clang++"
+        if [ -n "$TARGET_WINDOWS" ]; then
+            toolchain=$arch-w64-mingw32
+            CMAKE_SYSTEM_NAME=windows
+            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Windows"
+        else
+            toolchain=$arch-linux-gnu
+            CMAKE_SYSTEM_NAME=linux
+            # linux shared library must be position independent
+            # add libc++ path
+            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SHARED_LINKER_FLAGS=-L$NATIVE_PREFIX/$toolchain/lib"
+        fi
+        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$toolchain -DCMAKE_C_COMPILER_TARGET=$toolchain -DCMAKE_C_COMPILER=$toolchain-clang -DCMAKE_CXX_COMPILER=$toolchain-clang++"
     fi
     if [ -n "$SANITIZERS" ]; then
         case $arch in
@@ -110,6 +147,8 @@ for arch in $ARCHS; do
     [ -z "$CLEAN" ] || rm -rf build-$arch$BUILD_SUFFIX
     mkdir -p build-$arch$BUILD_SUFFIX
     cd build-$arch$BUILD_SUFFIX
+    echo "working dir: $(pwd)"
+    
     [ -n "$NO_RECONF" ] || rm -rf CMake*
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
@@ -129,13 +168,15 @@ for arch in $ARCHS; do
         -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
         -DSANITIZER_CXX_ABI=libc++ \
         -DCMAKE_C_FLAGS_INIT="$CFGUARD_CFLAGS" \
-        -DCMAKE_CXX_FLAGS_INIT="$CFGUARD_CFLAGS" \
+        -DCMAKE_CXX_FLAGS_INIT="$CFGUARD_CFLAGS" -DCMAKE_VERBOSE_MAKEFILE=ON  \
         $SRC_DIR
-    cmake --build . ${CORES:+-j${CORES}}
+
+    cmake --build . ${CORES:+-j${CORES}} --verbose
     cmake --install . --prefix "${WORKDIR}/install"
-    mkdir -p "$PREFIX/$arch-w64-mingw32/bin"
+    mkdir -p "$PREFIX/$toolchain/bin"
     if [ -n "$SANITIZERS" ]; then
-        mv "${WORKDIR}/install/lib/windows/"*.dll "$PREFIX/$arch-w64-mingw32/bin"
+        mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.dll "$PREFIX/$toolchain/bin"
+        mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.so "$PREFIX/$toolchain/bin"
     fi
     cd ..
 done

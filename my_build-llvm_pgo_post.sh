@@ -150,19 +150,23 @@ else
     esac
 fi
 
+
+
 CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
 if [ -n "$HOST" ]; then
     ARCH="${HOST%%-*}"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-g++"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_PROCESSOR=$ARCH"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-clang"    
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-clang++"
     case $HOST in
     *-mingw32)
+        toolchain=$arch-w64-mingw32
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_RC_COMPILER=$HOST-windres"
         ;;
     *-linux*)
+        toolchain=$arch-linux-gnu
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
         ;;
     *)
@@ -248,7 +252,18 @@ if [ -n "$TARGET_WINDOWS" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
+    MIMALLOC_PATH="/opt/llvm-mingw/x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a"
+    toolchain=x86_64-w64-mingw32
+else
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_RTLIB=compiler-rt"
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_UNWINDLIB=libunwind"
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
+    #CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
+    MIMALLOC_PATH="/opt/llvm-mingw/lib/mimalloc-2.1/libmimalloc.a"
+    toolchain=x86_64-linux-gnu
 fi
+MIMALLOC_INCLUDE_PATH=/opt/llvm-mingw/include/mimalloc-2.1
 
 if [ -n "$LTO" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DLLVM_ENABLE_LTO=$LTO"
@@ -306,7 +321,8 @@ fi
 if [ -n "$CLANG_TOOLS_EXTRA" ]; then
     PROJECTS="$PROJECTS;clang-tools-extra"
 fi
-
+LINK_FLAG="-Wl,${MIMALLOC_PATH} -L${PREFIX}/${toolchain}/lib" 
+COMMON_C_FLAG=" -I${PREFIX}/${toolchain}/include/c++/v1"
 [ -z "$CLEAN" ] || rm -rf $BUILDDIR
 mkdir -p $BUILDDIR
 cd $BUILDDIR
@@ -316,6 +332,10 @@ cmake \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_PROFDATA_FILE=/build/profdata.prof \
+    -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
+    -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+    -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+    -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
     -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
     -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
     -DLLVM_TARGETS_TO_BUILD="ARM;X86;RISCV" \

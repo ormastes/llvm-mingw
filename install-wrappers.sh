@@ -43,23 +43,27 @@ mkdir -p "$PREFIX"
 PREFIX="$(cd "$PREFIX" && pwd)"
 
 : ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64 riscv32}}
-: ${TARGET_OSES:=${TOOLCHAIN_TARGET_OSES-mingw32 mingw32uwp elf}}
+: ${TARGET_OSES:=${TOOLCHAIN_TARGET_OSES-w64-mingw32 w64-mingw32uwp unknown-elf linux-gnu}}
 
 if [ -n "$HOST" ] && [ -z "$CC" ]; then
     CC=$HOST-gcc
 fi
 : ${CC:=cc}
-
+set MIGW=0
 if [ -n "$HOST" ]; then
     case $HOST in
     *-mingw32)
         EXEEXT=.exe
+        unset MINGW
+        MINGW=1
         ;;
     esac
 else
     case $(uname) in
     MINGW*)
         EXEEXT=.exe
+        unset MINGW
+        MINGW=1
         ;;
     esac
 fi
@@ -144,10 +148,11 @@ fi
 cd "$PREFIX/bin"
 for arch in $ARCHS; do
     for target_os in $TARGET_OSES; do
+    toolchain=$arch-$target_os
         for exec in clang clang++ gcc g++ c++ as; do
-            ln -sf clang-target-wrapper$CTW_SUFFIX $arch-w64-$target_os-$exec$CTW_LINK_SUFFIX
+            ln -sf clang-target-wrapper$CTW_SUFFIX $toolchain-$exec$CTW_LINK_SUFFIX
         done
-        ln -sf clang-scan-deps-wrapper$CTW_SUFFIX $arch-w64-$target_os-clang-scan-deps$CTW_LINK_SUFFIX
+        ln -sf clang-scan-deps-wrapper$CTW_SUFFIX $toolchain-clang-scan-deps$CTW_LINK_SUFFIX
         for exec in addr2line ar ranlib nm objcopy readelf size strings strip llvm-ar llvm-ranlib; do
             if [ -n "$EXEEXT" ]; then
                 link_target=llvm-wrapper
@@ -161,14 +166,14 @@ for arch in $ARCHS; do
                     ;;
                 esac
             fi
-            ln -sf $link_target$EXEEXT $arch-w64-$target_os-$exec$EXEEXT || true
+            ln -sf $link_target$EXEEXT $toolchain-$exec$EXEEXT || true
         done
         # windres and dlltool can't use llvm-wrapper, as that loses the original
         # target arch prefix.
-        ln -sf llvm-windres$EXEEXT $arch-w64-$target_os-windres$EXEEXT
-        ln -sf llvm-dlltool$EXEEXT $arch-w64-$target_os-dlltool$EXEEXT
+        ln -sf llvm-windres$EXEEXT $toolchain-windres$EXEEXT
+        ln -sf llvm-dlltool$EXEEXT $toolchain-dlltool$EXEEXT
         for exec in ld objdump; do
-            ln -sf $exec-wrapper.sh $arch-w64-$target_os-$exec
+            ln -sf $exec-wrapper.sh $toolchain-$exec
         done
     done
 done
@@ -180,7 +185,11 @@ if [ -n "$EXEEXT" ]; then
         mv clang-scan-deps$EXEEXT clang-scan-deps-real$EXEEXT
     fi
     if [ -z "$HOST" ]; then
-        HOST=$(./clang-$CLANG_MAJOR -dumpmachine | sed 's/-.*//')-w64-mingw32
+        if [ -n "$MINGW" ]; then
+            HOST=$(./clang-$CLANG_MAJOR -dumpmachine | sed 's/-.*//')-w64-mingw32
+        else
+            HOST=$(./clang-$CLANG_MAJOR -dumpmachine | sed 's/-.*//')-linux-gnu
+        fi
     fi
     HOST_ARCH="${HOST%%-*}"
     # Install unprefixed wrappers if $HOST is one of the architectures

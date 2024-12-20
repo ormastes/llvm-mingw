@@ -17,7 +17,7 @@ WORKDIR /build
 
 ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 
-ARG TOOLCHAIN_ARCHS="i686 x86_64 armv7 aarch64"
+ARG TOOLCHAIN_ARCHS="riscv32 i686 x86_64 armv7 aarch64"
 
 ARG DEFAULT_CRT=ucrt
 
@@ -30,6 +30,13 @@ RUN ./build-llvm.sh $TOOLCHAIN_PREFIX
 RUN ./build-lldb-mi.sh $TOOLCHAIN_PREFIX
 RUN ./strip-llvm.sh $TOOLCHAIN_PREFIX
 RUN ./install-wrappers.sh $TOOLCHAIN_PREFIX 
+
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$PATH
+ARG TOOLCHAIN_ARCHS="riscv32"
+COPY my_build-compiler-rt.sh ./
+RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
+
+ARG TOOLCHAIN_ARCHS="i686 x86_64 armv7 aarch64"
 RUN ./build-mingw-w64.sh $TOOLCHAIN_PREFIX --with-default-msvcrt=$DEFAULT_CRT $CFGUARD_ARGS 
 RUN ./build-mingw-w64-tools.sh $TOOLCHAIN_PREFIX
 RUN ./build-compiler-rt.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
@@ -38,8 +45,12 @@ RUN ./build-mingw-w64-libraries.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 RUN ./build-compiler-rt.sh $TOOLCHAIN_PREFIX --build-sanitizers 
 RUN ./build-openmp.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 
-#RUN rm -rf /build/*
+COPY my_build_mimalloc.sh ./
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-w64-mingw32 
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 
-ENV PATH=$TOOLCHAIN_PREFIX/bin:$PATH
+
+
+
 
 

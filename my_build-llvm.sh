@@ -150,19 +150,23 @@ else
     esac
 fi
 
+
+
 CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
 if [ -n "$HOST" ]; then
     ARCH="${HOST%%-*}"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-g++"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_PROCESSOR=$ARCH"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-clang"    
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-clang++"
     case $HOST in
     *-mingw32)
+        toolchain=$arch-w64-mingw32
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_RC_COMPILER=$HOST-windres"
         ;;
     *-linux*)
+        toolchain=$arch-linux-gnu
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
         ;;
     *)
@@ -248,7 +252,18 @@ if [ -n "$TARGET_WINDOWS" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
+    MIMALLOC_PATH="/opt/llvm-mingw/x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a"
+    toolchain=x86_64-w64-mingw32
+else
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_RTLIB=compiler-rt"
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_UNWINDLIB=libunwind"
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
+    CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
+    #CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
+    MIMALLOC_PATH="/opt/llvm-mingw/lib/mimalloc-2.1/libmimalloc.a"
+    toolchain=x86_64-linux-gnu
 fi
+MIMALLOC_INCLUDE_PATH=/opt/llvm-mingw/include/mimalloc-2.1
 
 if [ -n "$LTO" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DLLVM_ENABLE_LTO=$LTO"
@@ -306,26 +321,45 @@ fi
 if [ -n "$CLANG_TOOLS_EXTRA" ]; then
     PROJECTS="$PROJECTS;clang-tools-extra"
 fi
+    LINK_FLAG="-Wl,${MIMALLOC_PATH} -L${PREFIX}/${toolchain}/lib" 
+    COMMON_C_FLAG=" -I${PREFIX}/${toolchain}/include/c++/v1"
+    [ -z "$CLEAN" ] || rm -rf $BUILDDIR
+    mkdir -p $BUILDDIR
+    cd $BUILDDIR
+    [ -n "$NO_RECONF" ] || rm -rf CMake*
+    cmake \
+        ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
+        -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
+        -DLLVM_TARGETS_TO_BUILD="ARM;X86;RISCV" \
+        -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
+        -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
+        -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
+        ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
+        $CMAKEFLAGS \
+        ..
 
-[ -z "$CLEAN" ] || rm -rf $BUILDDIR
-mkdir -p $BUILDDIR
-cd $BUILDDIR
-[ -n "$NO_RECONF" ] || rm -rf CMake*
-cmake \
-    ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
-    -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
-    -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
-    -DLLVM_TARGETS_TO_BUILD="ARM;X86;RISCV" \
-    -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
-    -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
-    -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
-    ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
-    $CMAKEFLAGS \
-    ..
-
-cmake --build . ${CORES:+-j${CORES}}
-cmake --install . --strip
+    cmake --build . ${CORES:+-j${CORES}}
+    cmake --install . --strip
 
 cp ../LICENSE.TXT $PREFIX
+
+# https://maskray.me/blog/2021-12-19-why-isnt-ld.lld-faster >> DCMAKE_EXE_LINKER_FLAGS, COMMON_C_FLAG
+# https://microsoft.github.io/mimalloc/overrides.html 
+# env LD_PRELOAD=./lib/libmimalloc.so myprogram\
+# ./x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a
+# ./i686-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a
+#
+# /MD or /MDd
+# include mimalloc-override.h (it was mimalloc-override.dll)
+# include mimalloc-new-delete.h for c++ new/delete
+# 9,3:   mi_version();       // ensure mimalloc library is linked
+# /INCLUDE:mi_version >> in clang >> -Wl,--undefined=mi_version
+# x64: ./x86_64-w64-mingw32/bin/mimalloc-redirect.dll ./x86_64-w64-mingw32/lib/libmimalloc.dll.a ./x86_64-w64-mingw32/bin/libmimalloc.dll
+# x86: ./i686-w64-mingw32/bin/mimalloc-redirect32.dll ./i686-w64-mingw32/lib/libmimalloc.dll.a ./i686-w64-mingw32/bin/libmimalloc.dll

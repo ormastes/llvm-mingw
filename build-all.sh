@@ -134,3 +134,5 @@ fi
 ./build-mingw-w64-libraries.sh $PREFIX $CFGUARD_ARGS
 ./build-compiler-rt.sh $PREFIX --build-sanitizers # CFGUARD_ARGS intentionally omitted
 ./build-openmp.sh $PREFIX $CFGUARD_ARGS
+./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
+./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-w64-mingw32 
