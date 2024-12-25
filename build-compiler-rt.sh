@@ -88,7 +88,7 @@ WORKDIR=$(mktemp -d); trap "rm -rf $WORKDIR" 0
 for arch in $ARCHS; do
     if [ "$arch" = "riscv32" ]; then
         OPTIONNAL_FLAGS="-DCOMPILER_RT_BAREMETAL_BUILD=ON -DCOMPILER_RT_BUILD_BUILTINS=ON -DCOMPILER_RT_BUILD_LIBFUZZER=OFF -DCOMPILER_RT_BUILD_MEMPROF=OFF -DCOMPILER_RT_BUILD_PROFILE=OFF -DCOMPILER_RT_BUILD_SANITIZERS=OFF -DCOMPILER_RT_BUILD_XRAY=OFF"
-        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=riscv32 -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/riscv32-w64-elf -DCMAKE_CXX_COMPILER=riscv32-w64-elf-clang -DCMAKE_ASM_COMPILER=riscv32-w64-elf-clang -DCMAKE_C_COMPILER=riscv32-w64-elf-clang -DCMAKE_C_COMPILER_TARGET=riscv32-w64-elf -DCMAKE_C_COMPILER=riscv32-w64-elf-clang -DCMAKE_CXX_COMPILER=riscv32-w64-elf-clang++ -DCMAKE_C_FLAGS=\"--target=riscv32-w64-elf\" -DCMAKE_CXX_FLAGS=\"--target=riscv32-w64-elf\" -DCMAKE_ASM_FLAGS=\"--target=riscv32-w64-elf\""
+        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_SYSTEM_PROCESSOR=riscv32 -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/riscv32-unknown-elf -DCMAKE_CXX_COMPILER=riscv32-unknown-elf-clang -DCMAKE_ASM_COMPILER=riscv32-unknown-elf-clang -DCMAKE_C_COMPILER=riscv32-unknown-elf-clang -DCMAKE_C_COMPILER_TARGET=riscv32-unknown-elf -DCMAKE_C_COMPILER=riscv32-unknown-elf-clang -DCMAKE_CXX_COMPILER=riscv32-unknown-elf-clang++ -DCMAKE_C_FLAGS=\"--target=riscv32-unknown-elf\" -DCMAKE_CXX_FLAGS=\"--target=riscv32-unknown-elf\" -DCMAKE_ASM_FLAGS=\"--target=riscv32-unknown-elf\""
     else
         OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Windows -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$arch-w64-mingw32 -DCMAKE_C_COMPILER_TARGET=$arch-w64-windows-gnu -DCMAKE_C_COMPILER=$arch-w64-mingw32-clang -DCMAKE_CXX_COMPILER=$arch-w64-mingw32-clang++"
     fi

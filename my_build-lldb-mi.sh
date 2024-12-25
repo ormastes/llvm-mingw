@@ -25,6 +25,9 @@ while [ $# -gt 0 ]; do
     --host=*)
         HOST="${1#*=}"
         ;;
+    --use-exsting-compiler)
+        USE_EXISTING_COMPILER=1
+        ;;
     *)
         PREFIX="$1"
         ;;
@@ -37,7 +40,15 @@ if [ -z "$PREFIX" ]; then
 fi
 
 mkdir -p "$PREFIX"
-PREFIX="$(cd "$PREFIX" && pwd)"
+if [ -n "$USE_EXISTING_COMPILER" ]; then
+NATIVE_PREFIX=/opt/llvm-mingw
+else
+NATIVE_PREFIX=$PREFIX
+fi
+NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
+export PATH="$NATIVE_PREFIX/bin:$PATH"
+echo "PATH=$PATH"
+echo "HOST=$HOST"
 
 if [ ! -d lldb-mi ]; then
     git clone https://github.com/lldb-tools/lldb-mi.git
@@ -83,31 +94,28 @@ if [ -d "$LLVM_SRC" ]; then
         fi
     done
 fi
+# Specify the path to the LLVM installation prefix
 echo "LLVM_DIR=$LLVM_DIR"
 if [ -n "$HOST" ]; then
     BUILDDIR=$BUILDDIR-$HOST
 
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-g++"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=clang"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=clang++"
     case $HOST in
     *-mingw32)
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_RC_COMPILER=$HOST-windres"
+        toolchain=x86_64-w64-mingw32
         ;;
     *-linux*)
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
+        toolchain=x86_64-linux-gnu
         ;;
     *)
         echo "Unrecognized host $HOST"
         exit 1
         ;;
     esac
-
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH=$LLVM_DIR"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY"
 fi
 
 if [ -n "$MACOS_REDIST" ]; then
@@ -139,9 +147,24 @@ cd lldb-mi
 mkdir -p $BUILDDIR
 cd $BUILDDIR
 [ -n "$NO_RECONF" ] || rm -rf CMake*
+echo "current directory: $(pwd)"
+    TOOLCHAIN_PATH="$PREFIX/$toolchain"
+    # if TOOLCHAIN_PATH is exist
+    if [ -d "$TOOLCHAIN_PATH" ]; then
+        LINK_FLAG="-Wl,-L${PREFIX}/${toolchain}/lib" 
+        COMMON_C_FLAG="-stdlib=libc++ -isystem ${PREFIX}/${toolchain}/include/c++/v1"
+    else
+        LINK_FLAG="" 
+        COMMON_C_FLAG=""   
+    fi
 cmake \
     ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+                -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_C_COMPILER_WORKS=TRUE -DCMAKE_CXX_COMPILER_WORKS=TRUE \
     -DCMAKE_BUILD_TYPE=Release \
     $CMAKEFLAGS \
     ..

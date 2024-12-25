@@ -1,10 +1,16 @@
 FROM ubuntu:22.04
 
-RUN apt-get update -qq && \
+RUN dpkg --add-architecture i386 && apt-get update -qq && \
     DEBIAN_FRONTEND="noninteractive" apt-get install -qqy --no-install-recommends \
     git wget bzip2 file unzip libtool pkg-config cmake build-essential \
     automake yasm gettext autopoint vim-tiny python3 python3-distutils \
     ninja-build ca-certificates curl less zip && \
+    apt-get clean -y && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN dpkg --add-architecture i386 && apt-get update -qq && \
+    DEBIAN_FRONTEND="noninteractive" apt-get install -qqy --no-install-recommends \
+    libstdc++6:i386 libc6-dev-i386 linux-libc-dev:i386 libncurses-dev:i386 tmux  && \
     apt-get clean -y && \
     rm -rf /var/lib/apt/lists/*
 
@@ -31,6 +37,7 @@ RUN ./build-lldb-mi.sh $TOOLCHAIN_PREFIX
 RUN ./strip-llvm.sh $TOOLCHAIN_PREFIX
 RUN ./install-wrappers.sh $TOOLCHAIN_PREFIX 
 
+ENV ORG_PATH=$PATH
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$PATH
 ARG TOOLCHAIN_ARCHS="riscv32"
 COPY my_build-compiler-rt.sh ./
@@ -48,9 +55,4 @@ RUN ./build-openmp.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 COPY my_build_mimalloc.sh ./
 RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-w64-mingw32 
 RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
-
-
-
-
-
 

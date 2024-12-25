@@ -192,6 +192,9 @@ if [ -n "$EXEEXT" ]; then
         fi
     fi
     HOST_ARCH="${HOST%%-*}"
+    if [ "$HOST_ARCH" = "riscv32" ]; then
+        HOST=$HOST_ARCH-unknown-elf
+    fi
     # Install unprefixed wrappers if $HOST is one of the architectures
     # we are installing wrappers for.
     case $ARCHS in

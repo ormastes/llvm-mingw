@@ -44,6 +44,9 @@ while [ $# -gt 0 ]; do
         CFGUARD_CFLAGS=
         ENABLE_CFGUARD=
         ;;
+    --use-exsting-compiler)
+        USE_EXISTING_COMPILER=1
+        ;;
     --host=*)
         HOST="${1#*=}"
         ;;
@@ -78,18 +81,17 @@ fi
 
 mkdir -p "$PREFIX"
 PREFIX="$(cd "$PREFIX" && pwd)"
-export PATH="$NATIVE_PREFIX/bin:$PATH"
 
-: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 armv7 riscv32}}
+: ${ARCHS:=${TOOLCHAIN_ARCHS-i686}}
 
 ANY_ARCH=$(echo $ARCHS | awk '{print $1}')
+if [ -n "$USE_EXISTING_COMPILER" ]; then
 NATIVE_PREFIX=/opt/llvm-mingw
+else
+NATIVE_PREFIX=$PREFIX
+fi
 NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
-CLANG_RESOURCE_DIR="$("$NATIVE_PREFIX/bin/$ANY_ARCH-w64-mingw32-clang" --print-resource-dir)"
-SUFFIX="${CLANG_RESOURCE_DIR#"$NATIVE_PREFIX"}"
-CLANG_RESOURCE_DIR="$PREFIX$SUFFIX"
-echo "Resource dir:$CLANG_RESOURCE_DIR"
-
+export PATH="$NATIVE_PREFIX/bin:$PATH"
 
 if [ ! -d llvm-project/compiler-rt ] || [ -n "$SYNC" ]; then
     CHECKOUT_ONLY=1 ./build-llvm.sh
@@ -112,6 +114,8 @@ fi
 cd llvm-project/compiler-rt
 # Use a staging directory in case parts of the resource dir are immutable
 WORKDIR=$(mktemp -d); trap "rm -rf $WORKDIR" 0
+echo "WORKDIR=$WORKDIR"
+echo "ARCHS=$ARCHS"
 
 for arch in $ARCHS; do
     if [ "$arch" = "riscv32" ]; then
@@ -123,16 +127,23 @@ for arch in $ARCHS; do
         if [ -n "$TARGET_WINDOWS" ]; then
             toolchain=$arch-w64-mingw32
             CMAKE_SYSTEM_NAME=windows
-            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Windows"
+            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Windows -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$arch-w64-mingw32"
         else
             toolchain=$arch-linux-gnu
             CMAKE_SYSTEM_NAME=linux
             # linux shared library must be position independent
             # add libc++ path
-            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_SHARED_LINKER_FLAGS=-L$NATIVE_PREFIX/$toolchain/lib"
+            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$arch-linux-gnu"
+            OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS "
+
         fi
-        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$toolchain -DCMAKE_C_COMPILER_TARGET=$toolchain -DCMAKE_C_COMPILER=$toolchain-clang -DCMAKE_CXX_COMPILER=$toolchain-clang++"
+        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_C_COMPILER_TARGET=$toolchain"
     fi
+    CLANG_RESOURCE_DIR="$("$NATIVE_PREFIX/bin/$toolchain-clang" --print-resource-dir)"
+    SUFFIX="${CLANG_RESOURCE_DIR#"$NATIVE_PREFIX"}"
+    CLANG_RESOURCE_DIR="$PREFIX$SUFFIX"
+    NATIVE_CLANG_RESOURCE_DIR="$NATIVE_PREFIX$SUFFIX"
+    INSTALL_PREFIX="$CLANG_RESOURCE_DIR"
     if [ -n "$SANITIZERS" ]; then
         case $arch in
         i686|x86_64)
@@ -143,22 +154,48 @@ for arch in $ARCHS; do
             ;;
         esac
     fi
-
+    TOOLCHAIN_PATH="$NATIVE_PREFIX/$toolchain"
+    # if TOOLCHAIN_PATH is exist
+    if [ -d "$TOOLCHAIN_PATH" ]; then
+        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_SHARED_LINKER_FLAGS=-L$NATIVE_PREFIX/$toolchain/lib -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$toolchain -DCMAKE_C_COMPILER=$toolchain-clang -DCMAKE_CXX_COMPILER=$toolchain-clang++"
+        LINK_FLAG="-Wl,-L${NATIVE_PREFIX}/${toolchain}/lib,-L${NATIVE_PREFIX}/lib/clang/18/lib/${CMAKE_SYSTEM_NAME}" 
+        COMMON_C_FLAG="-fPIC -I${NATIVE_PREFIX}/${toolchain}/include/c++/v1"
+        if [ -z "$TARGET_WINDOWS" ]; then
+            COMMON_C_FLAG="${COMMON_C_FLAG} -isystem /usr/include"
+            COMPILER_RT_BUILD_LIBFUZZER=OFF
+        else
+            COMPILER_RT_BUILD_LIBFUZZER=ON
+        fi
+    else
+        OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_C_COMPILER=${toolchain}-clang -DCMAKE_CXX_COMPILER=${toolchain}-clang++"
+        LINK_FLAG="" 
+        COMMON_C_FLAG="-fPIC"   
+        if [ -n "$TARGET_WINDOWS" ]; then
+            echo "windows withtout toolchain path"
+        else
+            echo "NOT windows withtout toolchain path"
+            LINK_FLAG="${LINK_FLAG} "
+            COMMON_C_FLAG="${COMMON_C_FLAG} -I${NATIVE_PREFIX}/${toolchain}/include/c++/v1"
+        fi
+    fi
+    
     [ -z "$CLEAN" ] || rm -rf build-$arch$BUILD_SUFFIX
     mkdir -p build-$arch$BUILD_SUFFIX
     cd build-$arch$BUILD_SUFFIX
-    echo "working dir: $(pwd)"
-    
     [ -n "$NO_RECONF" ] || rm -rf CMake*
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
         -DCMAKE_BUILD_TYPE=Release \
         ${OPTIONNAL_FLAGS} \
-        -DCMAKE_INSTALL_PREFIX="$CLANG_RESOURCE_DIR" \
+        -DCMAKE_INSTALL_PREFIX="$NATIVE_CLANG_RESOURCE_DIR" \
         -DCMAKE_AR="$NATIVE_PREFIX/bin/llvm-ar" \
         -DCMAKE_RANLIB="$NATIVE_PREFIX/bin/llvm-ranlib" \
         -DCMAKE_C_COMPILER_WORKS=1 \
         -DCMAKE_CXX_COMPILER_WORKS=1 \
+        -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" -DCOMPILER_RT_BUILD_LIBFUZZER=$COMPILER_RT_BUILD_LIBFUZZER \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
         -DCOMPILER_RT_DEFAULT_TARGET_ONLY=TRUE \
         -DCOMPILER_RT_USE_BUILTINS_LIBRARY=TRUE \
         -DCOMPILER_RT_BUILD_BUILTINS=$BUILD_BUILTINS \
@@ -175,7 +212,9 @@ for arch in $ARCHS; do
     cmake --install . --prefix "${WORKDIR}/install"
     mkdir -p "$PREFIX/$toolchain/bin"
     if [ -n "$SANITIZERS" ]; then
-        mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.dll "$PREFIX/$toolchain/bin"
+        if [ -n "$TARGET_WINDOWS" ]; then
+            mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.dll "$PREFIX/$toolchain/bin"
+        fi
         mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.so "$PREFIX/$toolchain/bin"
     fi
     cd ..
@@ -185,4 +224,5 @@ if [ -h "$CLANG_RESOURCE_DIR/include" ]; then
     # symlink to system headers - skip copy
     rm -rf ${WORKDIR}/install/include
 fi
+mkdir -p $CLANG_RESOURCE_DIR
 cp -r ${WORKDIR}/install/. $CLANG_RESOURCE_DIR

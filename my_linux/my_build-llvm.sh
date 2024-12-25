@@ -13,7 +13,7 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
+pushd ..
 set -e
 
 : ${LLVM_VERSION:=private/ormastes_current}
@@ -62,9 +62,6 @@ while [ $# -gt 0 ]; do
     --disable-lldb)
         unset LLDB
         ;;
-    --use-exsting-compiler)
-        USE_EXISTING_COMPILER=1
-        ;;
     --disable-clang-tools-extra)
         unset CLANG_TOOLS_EXTRA
         ;;
@@ -84,15 +81,6 @@ if [ -z "$CHECKOUT_ONLY" ]; then
     mkdir -p "$PREFIX"
     PREFIX="$(cd "$PREFIX" && pwd)"
 fi
-
-mkdir -p "$PREFIX"
-if [ -n "$USE_EXISTING_COMPILER" ]; then
-NATIVE_PREFIX=/opt/llvm-mingw
-else
-NATIVE_PREFIX=$PREFIX
-fi
-NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
-export PATH="$NATIVE_PREFIX/bin:$PATH"
 
 if [ ! -d llvm-project ]; then
     mkdir llvm-project
@@ -166,8 +154,8 @@ CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
 if [ -n "$HOST" ]; then
     ARCH="${HOST%%-*}"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-g++"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=clang"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=clang++"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_PROCESSOR=$ARCH"
     case $HOST in
     *-mingw32)
@@ -218,12 +206,12 @@ if [ -n "$HOST" ]; then
     if [ -n "$WITH_PYTHON" ] && [ -n "$TARGET_WINDOWS" ]; then
         # The python3-config script requires executing with bash. It outputs
         # an extra trailing space, which the extra 'echo' layer gets rid of.
-        EXT_SUFFIX="$(echo $(bash $NATIVE_PREFIX/python/bin/python3-config --extension-suffix))"
-        PYTHON_RELATIVE_PATH="$(cd "$NATIVE_PREFIX" && echo python/lib/python*/site-packages)"
-        PYTHON_INCLUDE_DIR="$(echo $NATIVE_PREFIX/python/include/python*)"
-        PYTHON_LIB="$(echo $NATIVE_PREFIX/python/lib/libpython3.*.dll.a)"
+        EXT_SUFFIX="$(echo $(bash $PREFIX/python/bin/python3-config --extension-suffix))"
+        PYTHON_RELATIVE_PATH="$(cd "$PREFIX" && echo python/lib/python*/site-packages)"
+        PYTHON_INCLUDE_DIR="$(echo $PREFIX/python/include/python*)"
+        PYTHON_LIB="$(echo $PREFIX/python/lib/libpython3.*.dll.a)"
         CMAKEFLAGS="$CMAKEFLAGS -DLLDB_ENABLE_PYTHON=ON"
-        CMAKEFLAGS="$CMAKEFLAGS -DPYTHON_HOME=$NATIVE_PREFIX/python"
+        CMAKEFLAGS="$CMAKEFLAGS -DPYTHON_HOME=$PREFIX/python"
         CMAKEFLAGS="$CMAKEFLAGS -DLLDB_PYTHON_HOME=../python"
         # Relative to the lldb install root
         CMAKEFLAGS="$CMAKEFLAGS -DLLDB_PYTHON_RELATIVE_PATH=$PYTHON_RELATIVE_PATH"
@@ -334,11 +322,10 @@ fi
 if [ -n "$CLANG_TOOLS_EXTRA" ]; then
     PROJECTS="$PROJECTS;clang-tools-extra"
 fi
-    TOOLCHAIN_PATH="$PREFIX/$toolchain"
     # if TOOLCHAIN_PATH is exist
     if [ -d "$TOOLCHAIN_PATH" ]; then
-        LINK_FLAG="-Wl,${MIMALLOC_PATH},-L${PREFIX}/${toolchain}/lib" 
-        COMMON_C_FLAG=" -I${PREFIX}/${toolchain}/include/c++/v1"
+        LINK_FLAG="-Wl,${MIMALLOC_PATH},-L${NATIVE_PREFIX}/${toolchain}/lib" 
+        COMMON_C_FLAG=" -I${NATIVE_PREFIX}/${toolchain}/include/c++/v1"
     else
         LINK_FLAG="-Wl,${MIMALLOC_PATH}" 
         COMMON_C_FLAG=""   
@@ -359,7 +346,7 @@ fi
         -DCMAKE_CXX_COMPILER_WORKS=1 \
         -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
         -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
-        -DLLVM_TARGETS_TO_BUILD="X86" \
+        -DLLVM_TARGETS_TO_BUILD="ARM;X86;RISCV" \
         -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
         -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
         -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
@@ -371,17 +358,4 @@ fi
     cmake --install . --strip
 
 cp ../LICENSE.TXT $PREFIX
-
-# https://maskray.me/blog/2021-12-19-why-isnt-ld.lld-faster >> DCMAKE_EXE_LINKER_FLAGS, COMMON_C_FLAG
-# https://microsoft.github.io/mimalloc/overrides.html 
-# env LD_PRELOAD=./lib/libmimalloc.so myprogram\
-# ./x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a
-# ./i686-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a
-#
-# /MD or /MDd
-# include mimalloc-override.h (it was mimalloc-override.dll)
-# include mimalloc-new-delete.h for c++ new/delete
-# 9,3:   mi_version();       // ensure mimalloc library is linked
-# /INCLUDE:mi_version >> in clang >> -Wl,--undefined=mi_version
-# x64: ./x86_64-w64-mingw32/bin/mimalloc-redirect.dll ./x86_64-w64-mingw32/lib/libmimalloc.dll.a ./x86_64-w64-mingw32/bin/libmimalloc.dll
-# x86: ./i686-w64-mingw32/bin/mimalloc-redirect32.dll ./i686-w64-mingw32/lib/libmimalloc.dll.a ./i686-w64-mingw32/bin/libmimalloc.dll
+popd

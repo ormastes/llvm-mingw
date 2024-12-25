@@ -72,6 +72,9 @@ while [ $# -gt 0 ]; do
     --no-tools)
         NO_TOOLS=1
         ;;
+    --build-linux)
+        BUILD_LINUX=1
+        ;;
     --wipe-runtimes)
         WIPE_RUNTIMES=1
         ;;
@@ -106,16 +109,18 @@ fi
 
 if [ -z "$NO_TOOLS" ]; then
     if [ -z "${HOST_CLANG}" ]; then
-        ./my_build-llvm.sh $PREFIX $LLVM_ARGS $HOST_ARGS
+        ./my_build-llvm.sh --stage2 $PREFIX $LLVM_ARGS $HOST_ARGS
         if [ -z "$NO_LLDB" ] && [ -z "$NO_LLDB_MI" ]; then
-            ./build-lldb-mi.sh $PREFIX $HOST_ARGS
+            ./my__build-lldb-mi.sh $PREFIX $HOST_ARGS
         fi
         if [ -z "$FULL_LLVM" ]; then
             ./strip-llvm.sh $PREFIX $HOST_ARGS
         fi
     fi
     ./install-wrappers.sh $PREFIX $HOST_ARGS ${HOST_CLANG:+--host-clang=$HOST_CLANG}
-    ./build-mingw-w64-tools.sh $PREFIX $HOST_ARGS
+    if [ -z "$BUILD_LINUX" ]; then
+        ./build-mingw-w64-tools.sh $PREFIX $HOST_ARGS
+    fi
 fi
 if [ -n "$NO_RUNTIMES" ]; then
     exit 0
@@ -130,10 +135,14 @@ fi
 if [ -n "$CLEAN_RUNTIMES" ]; then
     export CLEAN=1
 fi
+if [ -z "$BUILD_LINUX" ]; then
 ./build-mingw-w64.sh $PREFIX $MINGW_ARGS $CFGUARD_ARGS
+fi
 ./my_build-compiler-rt.sh $PREFIX $CFGUARD_ARGS
 ./build-libcxx.sh $PREFIX $CFGUARD_ARGS
+if [ -z "$BUILD_LINUX" ]; then
 ./build-mingw-w64-libraries.sh $PREFIX $CFGUARD_ARGS
+fi
 ./my_build-compiler-rt.sh $PREFIX --build-sanitizers # CFGUARD_ARGS intentionally omitted
 ./build-openmp.sh $PREFIX $CFGUARD_ARGS
 ./my_build_mimalloc.sh $PREFIX $CFGUARD_ARGS

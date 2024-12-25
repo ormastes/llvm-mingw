@@ -79,10 +79,6 @@ ARCHS="i686 x86_64"
 #: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64}}
 #: ${TARGET:=${TOOL_CHAIN_TARGET--w64-mingw32 -linux-gnu}}
 
-if [ ! -d llvm-project/libunwind ] || [ -n "$SYNC" ]; then
-    CHECKOUT_ONLY=1 ./build-llvm.sh
-fi
-
 
 LLVM_PATH="llvm-project/llvm"
 
@@ -133,15 +129,13 @@ for arch in $ARCHS; do
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$PREFIX$TOOLCHAIN_DIR" \
-        -DCMAKE_C_COMPILER=${TOOLCHAIN_PREFIX}clang \
-        -DCMAKE_CXX_COMPILER=${TOOLCHAIN_PREFIX}clang++ \
+        -DCMAKE_C_COMPILER=${TOOLCHAIN_PREFIX}gcc \
+        -DCMAKE_CXX_COMPILER=${TOOLCHAIN_PREFIX}g++ \
         -DCMAKE_CXX_COMPILER_TARGET=$TOOLCHAIN_TARGET \
         ${CMAKEFLAGS} \
         -DCMAKE_C_COMPILER_WORKS=TRUE \
         -DCMAKE_CXX_COMPILER_WORKS=TRUE \
         -DLLVM_PATH="$LLVM_PATH" \
-        -DCMAKE_AR="$TOOL_CHAIN_DIR/bin/${TOOLCHAIN_PREFIX}llvm-ar" \
-        -DCMAKE_RANLIB="$TOOL_CHAIN_DIR/bin/${TOOLCHAIN_PREFIX}llvm-ranlib" \
         -DCMAKE_C_FLAGS_INIT="$CFGUARD_CFLAGS" \
         -DCMAKE_CXX_FLAGS_INIT="$CFGUARD_CFLAGS" \
         ..

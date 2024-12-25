@@ -42,9 +42,6 @@ while [ $# -gt 0 ]; do
         CFGUARD_CFLAGS=
         ENABLE_CFGUARD=
         ;;
-    --use-exsting-compiler)
-        USE_EXISTING_COMPILER=1
-        ;;
     --host=*)
         HOST="${1#*=}"
         ;;
@@ -73,16 +70,12 @@ else
 fi
 
 mkdir -p "$PREFIX"
-if [ -n "$USE_EXISTING_COMPILER" ]; then
-NATIVE_PREFIX=/opt/llvm-mingw
-else
-NATIVE_PREFIX=$PREFIX
-fi
-NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
-export PATH="$NATIVE_PREFIX/bin:$PATH"
+PREFIX="$(cd "$PREFIX" && pwd)"
 
-: ${ARCHS:=${TOOLCHAIN_ARCHS-x86_64 i686}}
+export PATH="$PREFIX/bin:$PATH"
 
+#: ${ARCHS:=${TOOLCHAIN_ARCHS-x86_64 i686}}
+ARCHS=x86_64
 if [ ! -d llvm-project/libunwind ] || [ -n "$SYNC" ]; then
     CHECKOUT_ONLY=1 ./build-llvm.sh
 fi
@@ -107,6 +100,8 @@ else
     esac
 fi
 
+
+
 for arch in $ARCHS; do
     if [ "$arch" = "riscv32" ]; then
         toolchain=$arch-unknown-elf
@@ -125,13 +120,17 @@ for arch in $ARCHS; do
             CMAKE_SYSTEM_NAME=linux
             # linux shared library must be position independent
             # add libc++ path
-            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_FIND_ROOT_PATH=$PREFIX/$arch-linux-gnu"
+            OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$arch-linux-gnu"
             COMPILER_TARGET="$arch-linux-gnu"
 
         fi
         OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_C_COMPILER_TARGET=$toolchain"
     fi
 
+    # when arch is i686
+    if [ -z "$TARGET_WINDOWS" ]; then
+            BUILD_SHARED=OFF
+        fi
     [ -z "$CLEAN" ] || rm -rf $CMAKE_SYSTEM_NAME
     mkdir -p $CMAKE_SYSTEM_NAME
     cd $CMAKE_SYSTEM_NAME
@@ -139,21 +138,19 @@ for arch in $ARCHS; do
     mkdir -p build-$arch
     cd build-$arch
     [ -n "$NO_RECONF" ] || rm -rf CMake*
-    COMMON_C_FLAG="-fPIC"   
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$PREFIX/$toolchain" \
-        -DCMAKE_C_COMPILER=$toolchain-clang \
-        -DCMAKE_CXX_COMPILER=$toolchain-clang++ \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
         -DCMAKE_CXX_COMPILER_TARGET=$COMPILER_TARGET\
         ${OPTIONNAL_FLAGS} \
-        -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
         -DCMAKE_C_COMPILER_WORKS=TRUE \
         -DCMAKE_CXX_COMPILER_WORKS=TRUE \
         -DLLVM_PATH="$LLVM_PATH" \
-        -DCMAKE_AR="$NATIVE_PREFIX/bin/llvm-ar" \
-        -DCMAKE_RANLIB="$NATIVE_PREFIX/bin/llvm-ranlib" \
+        -DCMAKE_AR="$PREFIX/bin/llvm-ar" \
+        -DCMAKE_RANLIB="$PREFIX/bin/llvm-ranlib" \
         -DLLVM_ENABLE_RUNTIMES="libunwind;libcxxabi;libcxx" \
         -DLIBUNWIND_USE_COMPILER_RT=TRUE \
         -DLIBUNWIND_ENABLE_SHARED=$BUILD_SHARED \
@@ -178,5 +175,5 @@ for arch in $ARCHS; do
 
     cmake --build . ${CORES:+-j${CORES}}
     cmake --install .
-    cd ../..
+    cd ..
 done

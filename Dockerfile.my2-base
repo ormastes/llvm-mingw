@@ -4,14 +4,16 @@ WORKDIR /build
 COPY *.sh ./
 COPY wrappers/*.sh wrappers/*.c wrappers/*.h ./wrappers/
 
+ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
 RUN ./my_build-all.sh build/Windows --host=x86_64-w64-mingw32
-RUN ./my_build-all.sh build/Linux 
-
 RUN ./my_build-all.sh build/WindowsStatic --host=x86_64-w64-mingw32 --disable-dylib 
-RUN ./my_build-all.sh build/LinuxStatic --disable-dylib 
 
-RUN ./my_build-all.sh build/Windows32 --host=x86_64-w64-mingw32 
-RUN ./my_build-all.sh build/Linux32 
+ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+RUN ./my_build-all.sh build/Linux --host=x86_64-linux-gnu --disable-cfguard
+RUN ./my_build-all.sh build/LinuxStatic --host=x86_64-linux-gnu --disable-cfguard --disable-dylib 
+
 
 
 
