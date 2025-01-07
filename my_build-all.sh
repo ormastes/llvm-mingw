@@ -92,7 +92,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 if [ -z "$PREFIX" ]; then
-    echo "$0 [--host-clang[=clang]] [--enable-asserts] [--disable-dylib] [--full-llvm] [--with-python] [--disable-lldb] [--disable-lldb-mi] [--disable-clang-tools-extra] [--host=triple] [--with-default-win32-winnt=0x601] [--with-default-msvcrt=ucrt] [--enable-cfguard|--disable-cfguard] [--no-runtimes] [--no-tools] [--wipe-runtimes] [--clean-runtimes] dest"
+    echo "$0 [--host-clang[=clang]] [--enable-asserts] [--disable-dylib] [--full-llvm] [--with-python] [--disable-lldb] [--disable-lldb-mi] [--disable-clang-tools-extra] [--host=triple] [--with-default-win32-winnt=0x601] [--with-default-msvcrt=ucrt] [--enable-cfguard|--disable-cfguard] [--build-linux] [--no-runtimes] [--no-tools] [--wipe-runtimes] [--clean-runtimes] dest"
     exit 1
 fi
 
@@ -109,16 +109,21 @@ fi
 
 if [ -z "$NO_TOOLS" ]; then
     if [ -z "${HOST_CLANG}" ]; then
-        ./my_build-llvm.sh --stage2 $PREFIX $LLVM_ARGS $HOST_ARGS
+        echo "./my_build-llvm.sh  ${PREFIX} ${LLVM_ARGS} ${HOST_ARGS}"
+        ./my_build-llvm.sh  $PREFIX $LLVM_ARGS $HOST_ARGS
         if [ -z "$NO_LLDB" ] && [ -z "$NO_LLDB_MI" ]; then
-            ./my__build-lldb-mi.sh $PREFIX $HOST_ARGS
+            echo "./my_build-lldb-mi.sh ${PREFIX} --use-exsting-compiler ${HOST_ARGS}"
+            ./my_build-lldb-mi.sh $PREFIX --use-exsting-compiler $HOST_ARGS
         fi
         if [ -z "$FULL_LLVM" ]; then
+            echo "./strip-llvm.sh ${PREFIX} ${HOST_ARGS}"
             ./strip-llvm.sh $PREFIX $HOST_ARGS
         fi
     fi
+    echo "./install-wrappers.sh ${PREFIX} ${HOST_ARGS} ${HOST_CLANG:+--host-clang=$HOST_CLANG}"
     ./install-wrappers.sh $PREFIX $HOST_ARGS ${HOST_CLANG:+--host-clang=$HOST_CLANG}
     if [ -z "$BUILD_LINUX" ]; then
+        echo "./build-mingw-w64-tools.sh ${PREFIX} ${HOST_ARGS}"
         ./build-mingw-w64-tools.sh $PREFIX $HOST_ARGS
     fi
 fi
@@ -136,13 +141,22 @@ if [ -n "$CLEAN_RUNTIMES" ]; then
     export CLEAN=1
 fi
 if [ -z "$BUILD_LINUX" ]; then
+echo "./build-mingw-w64.sh ${PREFIX} ${HOST_ARGS} ${CFGUARD_ARGS}"
 ./build-mingw-w64.sh $PREFIX $MINGW_ARGS $CFGUARD_ARGS
 fi
-./my_build-compiler-rt.sh $PREFIX $CFGUARD_ARGS
-./build-libcxx.sh $PREFIX $CFGUARD_ARGS
+echo "./my_build-compiler-rt.sh ${PREFIX} --use-exsting-compiler ${HOST_ARGS} ${CFGUARD_ARGS}"
+./my_build-compiler-rt.sh $PREFIX --use-exsting-compiler $HOST_ARGS $CFGUARD_ARGS
+echo "./my_build-libcxx.sh ${PREFIX} --use-exsting-compiler ${HOST_ARGS} ${CFGUARD_ARGS}"
+./my_build-libcxx.sh $PREFIX --use-exsting-compiler $HOST_ARGS $CFGUARD_ARGS
 if [ -z "$BUILD_LINUX" ]; then
-./build-mingw-w64-libraries.sh $PREFIX $CFGUARD_ARGS
+echo "./my_build-mingw-w64-libraries.sh ${PREFIX} ${CFGUARD_ARGS}"
+./my_build-mingw-w64-libraries.sh $PREFIX $CFGUARD_ARGS
 fi
-./my_build-compiler-rt.sh $PREFIX --build-sanitizers # CFGUARD_ARGS intentionally omitted
+echo "./my_build-compiler-rt.sh ${PREFIX} --use-exsting-compiler ${HOST_ARGS} --build-sanitizers"
+./my_build-compiler-rt.sh $PREFIX --use-exsting-compiler $HOST_ARGS --build-sanitizers # CFGUARD_ARGS intentionally omitted
+if [ -z "$BUILD_LINUX" ]; then
+echo "./build-openmp.sh ${PREFIX} ${CFGUARD_ARGS} "
 ./build-openmp.sh $PREFIX $CFGUARD_ARGS
-./my_build_mimalloc.sh $PREFIX $CFGUARD_ARGS
+fi
+echo "my_build_mimalloc ${PREFIX} --use-exsting-compiler ${CFGUARD_ARGS}"
+./my_build_mimalloc.sh $PREFIX  --use-exsting-compiler $CFGUARD_ARGS

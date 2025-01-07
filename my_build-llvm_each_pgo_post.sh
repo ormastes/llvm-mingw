@@ -350,6 +350,6 @@ for target in $TARGETS; do
 
     cmake --build . ${CORES:+-j${CORES}}
     cmake --install . --strip
-    done
+done
 
 cp ../LICENSE.TXT $PREFIX

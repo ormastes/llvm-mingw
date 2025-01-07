@@ -24,6 +24,7 @@ LINK_DYLIB=ON
 ASSERTSSUFFIX=""
 LLDB=ON
 CLANG_TOOLS_EXTRA=ON
+COMPILER_FOR_EACH_ARCH=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -61,6 +62,9 @@ while [ $# -gt 0 ]; do
         ;;
     --disable-lldb)
         unset LLDB
+        ;;
+    --compiler_for_each_arch)
+        COMPILER_FOR_EACH_ARCH=1
         ;;
     --disable-clang-tools-extra)
         unset CLANG_TOOLS_EXTRA
@@ -150,7 +154,12 @@ else
     esac
 fi
 
-
+: ${TARGETS:=${TARGETS_TO_BUILD-ARM X86 RISCV}}
+if [ -n "$COMPILER_FOR_EACH_ARCH" ]; then
+else
+    # strip and replace ' ' with ';'
+    TARGETS=$(echo $TARGETS | xargs)
+fi
 
 CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
@@ -321,34 +330,37 @@ fi
 if [ -n "$CLANG_TOOLS_EXTRA" ]; then
     PROJECTS="$PROJECTS;clang-tools-extra"
 fi
-LINK_FLAG="-Wl,${MIMALLOC_PATH} -L${PREFIX}/${toolchain}/lib" 
-COMMON_C_FLAG=" -I${PREFIX}/${toolchain}/include/c++/v1"
-[ -z "$CLEAN" ] || rm -rf $BUILDDIR
-mkdir -p $BUILDDIR
-cd $BUILDDIR
-[ -n "$NO_RECONF" ] || rm -rf CMake*
-cmake \
-    ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
-    -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_PROFDATA_FILE=/build/profdata.prof \
-    -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
-    -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
-    -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
-    -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
-    -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
-    -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
-    -DLLVM_TARGETS_TO_BUILD="ARM;X86;RISCV" \
-    -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
-    -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
-    ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
-    $CMAKEFLAGS \
-    ..
 
-# llvm-profdata merge -output=C:/dev/llvm_pgo_profile/pgo_gen/profdata.prof C:/dev/llvm_pgo_profile/*.profraw
-# -DLLVM_PROFDATA_FILE=/build/profdata.prof
+for target in $TARGETS; do
+    LINK_FLAG="-Wl,${MIMALLOC_PATH} -L${PREFIX}/${toolchain}/lib" 
+    COMMON_C_FLAG=" -I${PREFIX}/${toolchain}/include/c++/v1"
+    [ -z "$CLEAN" ] || rm -rf $BUILDDIR
+    mkdir -p $BUILDDIR
+    cd $BUILDDIR
+    [ -n "$NO_RECONF" ] || rm -rf CMake*
+    cmake \
+        ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}${MIDDLE}_$target" \
+        -DCMAKE_BUILD_TYPE=Release \
+        ${LLVM_PROFDATA_FILE_OPTION} \
+        -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
+        -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
+        -DLLVM_TARGETS_TO_BUILD=$target \
+        -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
+        -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
+        ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
+        $CMAKEFLAGS \
+        ..
 
-cmake --build . ${CORES:+-j${CORES}}
-cmake --install . --strip
+    # llvm-profdata merge -output=C:/dev/llvm_pgo_profile/pgo_gen/profdata.prof C:/dev/llvm_pgo_profile/*.profraw
+    # -DLLVM_PROFDATA_FILE=/build/profdata.prof
+
+    cmake --build . ${CORES:+-j${CORES}}
+    cmake --install . --strip
+done
 
 cp ../LICENSE.TXT $PREFIX

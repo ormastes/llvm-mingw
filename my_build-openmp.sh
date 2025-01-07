@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (c) 2018 Martin Storsjo
+# Copyright (c) 2020 Martin Storsjo
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -14,68 +14,34 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-# if mimalloc dir is not present, clone it
-if [ ! -d mimalloc ]; then
-    git clone https://github.com/ormastes/mimalloc.git
-    cd mimalloc
-    git checkout private/current
-    cd ..
-fi
-
 set -e
 
-BUILD_STATIC=ON
-BUILD_SHARED=ON
 CFGUARD_CFLAGS="-mguard=cf"
-TOOL_CHAIN_DIR=/opt/llvm-mingw
-HOST_ARGS=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
-    --disable-shared)
-        BUILD_SHARED=OFF
-        ;;
-    --enable-shared)
-        BUILD_SHARED=ON
-        ;;
-    --disable-static)
-        BUILD_STATIC=OFF
-        ;;
-    --enable-static)
-        BUILD_STATIC=ON
-        ;;
     --enable-cfguard)
         CFGUARD_CFLAGS="-mguard=cf"
         ;;
     --disable-cfguard)
-        CFGUARD_ARGS=
+        CFGUARD_CFLAGS=
         ;;
     --use-exsting-compiler)
         USE_EXISTING_COMPILER=1
         ;;
-    --host=*)
-        HOST_ARGS="$HOST_ARGS $1"
-        # taks char after '='
-        HOST_ARGS="${1#*=}"
-        ;;
     *)
-        if [ -n "$PREFIX" ]; then
-            echo Unrecognized parameter $1
-            exit 1
-        fi
         PREFIX="$1"
         ;;
     esac
     shift
 done
 if [ -z "$PREFIX" ]; then
-    echo "$0 [--disable-shared] [--disable-static] [--enable-cfguard|--disable-cfguard] dest"
+    echo "$0 [--enable-cfguard|--disable-cfguard] dest"
     exit 1
 fi
 
 mkdir -p "$PREFIX"
 PREFIX="$(cd "$PREFIX" && pwd)"
-
 if [ -n "$USE_EXISTING_COMPILER" ]; then
     if [ -n "$TARGET_WINDOWS" ]; then
         NATIVE_PREFIX=/opt/llvm-mingw
@@ -88,13 +54,13 @@ fi
 NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
 export PATH="$NATIVE_PREFIX/bin:$PATH"
 
-ARCHS="i686 x86_64"
-#: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64}}
-#: ${TARGET:=${TOOL_CHAIN_TARGET--w64-mingw32 -linux-gnu}}
+: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64}}
 
+if [ ! -d llvm-project/openmp ] || [ -n "$SYNC" ]; then
+    CHECKOUT_ONLY=1 ./build-llvm.sh
+fi
 
-LLVM_PATH="llvm-project/llvm"
-
+cd llvm-project/openmp
 
 if command -v ninja >/dev/null; then
     CMAKE_GENERATOR="Ninja"
@@ -110,29 +76,14 @@ else
     esac
 fi
 
-CMAKEFLAGS=
-
-
-cd mimalloc
-
 for arch in $ARCHS; do
-    case $HOST_ARGS in
-        *-mingw32)
-            CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
-            CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_RC_COMPILER=$HOST_ARGS-windres"
-            TOOLCHAIN_DIR="/$arch-w64-mingw32"
-            TOOLCHAIN_PREFIX="$arch-w64-mingw32-"
-            TOOLCHAIN_TARGET="$arch-w64-windows-gnu"
-            ;;
-        *)
-            CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
-            TOOLCHAIN_DIR=""
-            TOOLCHAIN_PREFIX=""
-            TOOLCHAIN_TARGET="$arch-linux-gnu"
-            CFGUARD_CFLAGS=""
-            ;;
+    CMAKEFLAGS=""
+    case $arch in
+    x86_64)
+        CMAKEFLAGS="$CMAKEFLAGS -DLIBOMP_ASMFLAGS=-m64"
+        ;;
     esac
-    CFLAGS="$CFGUARD_CFLAGS"
+
     [ -z "$CLEAN" ] || rm -rf build-$arch
     mkdir -p build-$arch
     cd build-$arch
@@ -141,20 +92,22 @@ for arch in $ARCHS; do
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$PREFIX$TOOLCHAIN_DIR" \
-        -DCMAKE_C_COMPILER=${TOOLCHAIN_PREFIX}gcc \
-        -DCMAKE_CXX_COMPILER=${TOOLCHAIN_PREFIX}g++ \
-        -DCMAKE_CXX_COMPILER_TARGET=$TOOLCHAIN_TARGET \
-        ${CMAKEFLAGS} \
-        -DCMAKE_C_COMPILER_WORKS=TRUE \
-        -DCMAKE_CXX_COMPILER_WORKS=TRUE \
-        -DLLVM_PATH="$LLVM_PATH" \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX/$arch-w64-mingw32" \
+        -DCMAKE_C_COMPILER=$arch-w64-mingw32-clang \
+        -DCMAKE_CXX_COMPILER=$arch-w64-mingw32-clang++ \
+        -DCMAKE_RC_COMPILER=$arch-w64-mingw32-windres \
+        -DCMAKE_ASM_MASM_COMPILER=llvm-ml \
+        -DCMAKE_SYSTEM_NAME=Windows \
+        -DCMAKE_AR="$NATIVE_PREFIX/bin/llvm-ar" \
+        -DCMAKE_RANLIB="$NATIVE_PREFIX/bin/llvm-ranlib" \
+        -DLIBOMP_ENABLE_SHARED=TRUE \
         -DCMAKE_C_FLAGS_INIT="$CFGUARD_CFLAGS" \
         -DCMAKE_CXX_FLAGS_INIT="$CFGUARD_CFLAGS" \
+        $CMAKEFLAGS \
         ..
-
     cmake --build . ${CORES:+-j${CORES}}
     cmake --install .
+    rm -f $PREFIX/$arch-w64-mingw32/bin/*iomp5md*
+    rm -f $PREFIX/$arch-w64-mingw32/lib/*iomp5md*
     cd ..
 done
-cd ..

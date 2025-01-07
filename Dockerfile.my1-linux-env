@@ -21,6 +21,7 @@ COPY wrappers/*.sh wrappers/*.c wrappers/*.h ./wrappers/
 
 ARG TOOLCHAIN_ARCHS="riscv32"
 ENV HOST_ARG=--host=riscv32-unknown-elf
+
 COPY my_build-compiler-rt.sh ./
 RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX --use-exsting-compiler --disable-cfguard $HOST_ARG
 
@@ -34,7 +35,6 @@ COPY my_build-libcxx.sh  ./
 RUN ./my_build-libcxx.sh $TOOLCHAIN_PREFIX --use-exsting-compiler --disable-cfguard $HOST_ARG
 #RUN ./build-mingw-w64-libraries.sh $TOOLCHAIN_PREFIX 
 
-
 ARG TOOLCHAIN_ARCHS="x86_64 i686 riscv32 armv7" 
 COPY my_build-llvm.sh ./
 RUN ./my_build-llvm.sh $TOOLCHAIN_PREFIX --use-exsting-compiler $HOST_ARG
@@ -43,7 +43,11 @@ RUN ./my_build-lldb-mi.sh $TOOLCHAIN_PREFIX --use-exsting-compiler $HOST_ARG
 RUN ./strip-llvm.sh $TOOLCHAIN_PREFIX $HOST_ARG
 RUN ./install-wrappers.sh $TOOLCHAIN_PREFIX 
 
+
 ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64"
 RUN cp /opt/llvm-linux/x86_64-linux-gnu/lib/* /opt/llvm-linux/lib
 RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX --disable-cfguard $HOST_ARG --build-sanitizers 
 #RUN ./build-openmp.sh $TOOLCHAIN_PREFIX 
+
+RUN cp -r /opt/llvm-linux/i686-linux-gnu /opt/llvm-mingw/i686-linux-gnu
+RUN cp -r /opt/llvm-linux/x86_64-linux-gnu /opt/llvm-mingw/x86_64-linux-gnu

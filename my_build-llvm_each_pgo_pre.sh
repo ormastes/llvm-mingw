@@ -151,6 +151,11 @@ else
 fi
 
 : ${TARGETS:=${TARGETS_TO_BUILD-ARM X86 RISCV}}
+if [ -n "$COMPILER_FOR_EACH_ARCH" ]; then
+else
+    # strip and replace ' ' with ';'
+    TARGETS=$(echo $TARGETS | xargs)
+fi
 
 CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
@@ -331,7 +336,7 @@ for target in $TARGETS; do
     [ -n "$NO_RECONF" ] || rm -rf CMake*
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
-        -DCMAKE_INSTALL_PREFIX="${PREFIX}s_pre/$target" \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}_pre_$target"\
         -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" \
         -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
         -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \

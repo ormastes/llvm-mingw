@@ -74,9 +74,9 @@ fi
 
 mkdir -p "$PREFIX"
 if [ -n "$USE_EXISTING_COMPILER" ]; then
-NATIVE_PREFIX=/opt/llvm-mingw
+    NATIVE_PREFIX=/opt/llvm-mingw
 else
-NATIVE_PREFIX=$PREFIX
+    NATIVE_PREFIX=$PREFIX
 fi
 NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
 export PATH="$NATIVE_PREFIX/bin:$PATH"

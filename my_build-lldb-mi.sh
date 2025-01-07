@@ -38,10 +38,26 @@ if [ -z "$PREFIX" ]; then
     echo $0 [--host=<triple>] dest
     exit 1
 fi
-
+if [ -n "$HOST" ]; then
+    case $HOST in
+    *-mingw32)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+else
+    case $(uname) in
+    MINGW*)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+fi
 mkdir -p "$PREFIX"
 if [ -n "$USE_EXISTING_COMPILER" ]; then
-NATIVE_PREFIX=/opt/llvm-mingw
+    if [ -n "$TARGET_WINDOWS" ]; then
+        NATIVE_PREFIX=/opt/llvm-mingw
+    else
+        NATIVE_PREFIX=/opt/llvm-linux
+    fi
 else
 NATIVE_PREFIX=$PREFIX
 fi
@@ -76,7 +92,11 @@ else
     esac
 fi
 
-export LLVM_DIR="$PREFIX"
+if [ -n "$TOOLCHAIN_PREFIX" ]; then
+    export LLVM_DIR="$TOOLCHAIN_PREFIX/$HOST"
+else
+    export LLVM_DIR="$PREFIX/$HOST"
+fi
 
 
 # Try to find/guess the builddir under the llvm buildtree next by.
@@ -99,8 +119,8 @@ echo "LLVM_DIR=$LLVM_DIR"
 if [ -n "$HOST" ]; then
     BUILDDIR=$BUILDDIR-$HOST
 
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=clang"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=clang++"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-g++"
     case $HOST in
     *-mingw32)
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
@@ -117,6 +137,11 @@ if [ -n "$HOST" ]; then
         ;;
     esac
 fi
+CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH=$LLVM_DIR"
+CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER"
+CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY"
+CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY"
+CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY"
 
 if [ -n "$MACOS_REDIST" ]; then
     : ${MACOS_REDIST_ARCHS:=arm64 x86_64}
@@ -148,11 +173,12 @@ mkdir -p $BUILDDIR
 cd $BUILDDIR
 [ -n "$NO_RECONF" ] || rm -rf CMake*
 echo "current directory: $(pwd)"
-    TOOLCHAIN_PATH="$PREFIX/$toolchain"
+    TOOLCHAIN_PATH="$NATIVE_PREFIX/$toolchain"
+    echo "TOOLCHAIN_PATH=$TOOLCHAIN_PATH"
     # if TOOLCHAIN_PATH is exist
     if [ -d "$TOOLCHAIN_PATH" ]; then
-        LINK_FLAG="-Wl,-L${PREFIX}/${toolchain}/lib" 
-        COMMON_C_FLAG="-stdlib=libc++ -isystem ${PREFIX}/${toolchain}/include/c++/v1"
+        LINK_FLAG="-Wl,-L${TOOLCHAIN_PATH}/lib" 
+        COMMON_C_FLAG="-stdlib=libc++ -isystem ${TOOLCHAIN_PATH}/include/c++/v1"
     else
         LINK_FLAG="" 
         COMMON_C_FLAG=""   

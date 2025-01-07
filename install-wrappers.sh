@@ -39,13 +39,14 @@ if [ -z "$PREFIX" ]; then
     echo $0 [--host=triple] [--host-clang[=clang]] dest
     exit 1
 fi
+
 mkdir -p "$PREFIX"
 PREFIX="$(cd "$PREFIX" && pwd)"
 
 : ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64 riscv32}}
 : ${TARGET_OSES:=${TOOLCHAIN_TARGET_OSES-w64-mingw32 w64-mingw32uwp unknown-elf linux-gnu}}
 
-if [ -n "$HOST" ] && [ -z "$CC" ]; then
+if [ -n "$HOST" ] && [ -z "$CC" ] && [ -z "$HOST_CLANG" ]; then
     CC=$HOST-gcc
 fi
 : ${CC:=cc}

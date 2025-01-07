@@ -70,6 +70,9 @@ if [ -n "$HOST" ]; then
     *-mingw32)
         TARGET_WINDOWS=1
         ;;
+    *-unknown-elf)
+        TARGET_WINDOWS=1
+        ;;
     esac
 else
     case $(uname) in
@@ -82,13 +85,13 @@ fi
 mkdir -p "$PREFIX"
 PREFIX="$(cd "$PREFIX" && pwd)"
 
-: ${ARCHS:=${TOOLCHAIN_ARCHS-i686}}
+: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64}}
 
 ANY_ARCH=$(echo $ARCHS | awk '{print $1}')
 if [ -n "$USE_EXISTING_COMPILER" ]; then
-NATIVE_PREFIX=/opt/llvm-mingw
+    NATIVE_PREFIX=/opt/llvm-mingw
 else
-NATIVE_PREFIX=$PREFIX
+    NATIVE_PREFIX=$PREFIX
 fi
 NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
 export PATH="$NATIVE_PREFIX/bin:$PATH"
@@ -134,8 +137,6 @@ for arch in $ARCHS; do
             # linux shared library must be position independent
             # add libc++ path
             OPTIONNAL_FLAGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$arch-linux-gnu"
-            OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS "
-
         fi
         OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_C_COMPILER_TARGET=$toolchain"
     fi
@@ -155,6 +156,7 @@ for arch in $ARCHS; do
         esac
     fi
     TOOLCHAIN_PATH="$NATIVE_PREFIX/$toolchain"
+    echo "TOOLCHAIN_PATH=$TOOLCHAIN_PATH"
     # if TOOLCHAIN_PATH is exist
     if [ -d "$TOOLCHAIN_PATH" ]; then
         OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_SHARED_LINKER_FLAGS=-L$NATIVE_PREFIX/$toolchain/lib -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$toolchain -DCMAKE_C_COMPILER=$toolchain-clang -DCMAKE_CXX_COMPILER=$toolchain-clang++"
@@ -214,8 +216,9 @@ for arch in $ARCHS; do
     if [ -n "$SANITIZERS" ]; then
         if [ -n "$TARGET_WINDOWS" ]; then
             mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.dll "$PREFIX/$toolchain/bin"
+        else
+            mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.so "$PREFIX/$toolchain/bin"
         fi
-        mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.so "$PREFIX/$toolchain/bin"
     fi
     cd ..
 done

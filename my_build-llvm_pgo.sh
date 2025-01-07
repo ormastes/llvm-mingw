@@ -24,6 +24,9 @@ LINK_DYLIB=ON
 ASSERTSSUFFIX=""
 LLDB=ON
 CLANG_TOOLS_EXTRA=ON
+COMPILER_FOR_EACH_ARCH=0
+PGO_PRE=0
+PGO_POST=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -62,8 +65,20 @@ while [ $# -gt 0 ]; do
     --disable-lldb)
         unset LLDB
         ;;
-    --use-exsting-compiler)
-        USE_EXISTING_COMPILER=1
+    --compiler_for_each_arch)
+        COMPILER_FOR_EACH_ARCH=1
+        ;;
+    --host-arch=*)
+        HOST_ARCH="-march=${1#*=}"
+        ;; 
+    --host-tune=*)
+        HOST_TUNE="-mtune=${1#*=}"
+        ;;
+    --pgo-pre)
+        PGO_PRE=1
+        ;;
+    --pgo-post)
+        PGO_POST=1
         ;;
     --disable-clang-tools-extra)
         unset CLANG_TOOLS_EXTRA
@@ -84,19 +99,6 @@ if [ -z "$CHECKOUT_ONLY" ]; then
     mkdir -p "$PREFIX"
     PREFIX="$(cd "$PREFIX" && pwd)"
 fi
-
-mkdir -p "$PREFIX"
-if [ -n "$USE_EXISTING_COMPILER" ]; then
-    if [ -n "$TARGET_WINDOWS" ]; then
-        NATIVE_PREFIX=/opt/llvm-mingw
-    else
-        NATIVE_PREFIX=/opt/llvm-linux
-    fi
-else
-    NATIVE_PREFIX=$PREFIX
-fi
-NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
-export PATH="$NATIVE_PREFIX/bin:$PATH"
 
 if [ ! -d llvm-project ]; then
     mkdir llvm-project
@@ -166,26 +168,30 @@ else
     esac
 fi
 
+: ${TARGETS:=${TARGETS_TO_BUILD-ARM X86 RISCV}}
+if [ -n "$COMPILER_FOR_EACH_ARCH" ]; then
+    TARGETS=$TARGETS
+else
+    # strip and replace ' ' with ';'
+    TARGETS=$(echo $TARGETS | xargs)
+fi
+
 CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
 if [ -n "$HOST" ]; then
     ARCH="${HOST%%-*}"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-g++"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-clang"    
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-clang++"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_PROCESSOR=$ARCH"
     case $HOST in
     *-mingw32)
         toolchain=$arch-w64-mingw32
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_RC_COMPILER=$HOST-windres"
-        CROSS_ROOT=$(cd $(dirname $(command -v $HOST-gcc))/../$HOST && pwd)
         ;;
     *-linux*)
         toolchain=$arch-linux-gnu
-        LINK_FLAG="-Wl,-lc++,-lc++abi,-lunwind,-latomic"
-        GCC_NAME=gcc
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
-        CROSS_ROOT=$(cd $(dirname $(command -v gcc)) && pwd)
         ;;
     *)
         echo "Unrecognized host $HOST"
@@ -211,7 +217,7 @@ if [ -n "$HOST" ]; then
     if [ -n "$native" ]; then
         CMAKEFLAGS="$CMAKEFLAGS -DLLVM_NATIVE_TOOL_DIR=$native"
     fi
-
+    CROSS_ROOT=$(cd $(dirname $(command -v $HOST-gcc))/../$HOST && pwd)
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH=$CROSS_ROOT"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY"
@@ -219,21 +225,16 @@ if [ -n "$HOST" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY"
 
     BUILDDIR=$BUILDDIR-$HOST
-    # if string compare LINK_DYLIB with OFF
-    if [ "$LINK_DYLIB" = "OFF" ]; then
-        BUILDDIR=$BUILDDIR-static
-    fi
-
 
     if [ -n "$WITH_PYTHON" ] && [ -n "$TARGET_WINDOWS" ]; then
         # The python3-config script requires executing with bash. It outputs
         # an extra trailing space, which the extra 'echo' layer gets rid of.
-        EXT_SUFFIX="$(echo $(bash $NATIVE_PREFIX/python/bin/python3-config --extension-suffix))"
-        PYTHON_RELATIVE_PATH="$(cd "$NATIVE_PREFIX" && echo python/lib/python*/site-packages)"
-        PYTHON_INCLUDE_DIR="$(echo $NATIVE_PREFIX/python/include/python*)"
-        PYTHON_LIB="$(echo $NATIVE_PREFIX/python/lib/libpython3.*.dll.a)"
+        EXT_SUFFIX="$(echo $(bash $PREFIX/python/bin/python3-config --extension-suffix))"
+        PYTHON_RELATIVE_PATH="$(cd "$PREFIX" && echo python/lib/python*/site-packages)"
+        PYTHON_INCLUDE_DIR="$(echo $PREFIX/python/include/python*)"
+        PYTHON_LIB="$(echo $PREFIX/python/lib/libpython3.*.dll.a)"
         CMAKEFLAGS="$CMAKEFLAGS -DLLDB_ENABLE_PYTHON=ON"
-        CMAKEFLAGS="$CMAKEFLAGS -DPYTHON_HOME=$NATIVE_PREFIX/python"
+        CMAKEFLAGS="$CMAKEFLAGS -DPYTHON_HOME=$PREFIX/python"
         CMAKEFLAGS="$CMAKEFLAGS -DLLDB_PYTHON_HOME=../python"
         # Relative to the lldb install root
         CMAKEFLAGS="$CMAKEFLAGS -DLLDB_PYTHON_RELATIVE_PATH=$PYTHON_RELATIVE_PATH"
@@ -247,8 +248,8 @@ if [ -n "$HOST" ]; then
 elif [ -n "$STAGE2" ]; then
     # Build using an earlier built and installed clang in the target directory
     export PATH="$PREFIX/bin:$PATH"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-clang"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-clang++"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=clang"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=clang++"
     CMAKEFLAGS="$CMAKEFLAGS -DLLVM_USE_LINKER=lld"
 else
     # Native compilation with the system default compiler.
@@ -330,6 +331,8 @@ if [ -z "$HOST" ] && [ "$(uname)" = "Darwin" ]; then
     fi
 fi
 
+COMMON_C_FLAG="$COMMON_C_FLAG $HOST_TUNE $HOST_ARCH"
+
 TOOLCHAIN_ONLY=ON
 if [ -n "$FULL_LLVM" ]; then
     TOOLCHAIN_ONLY=OFF
@@ -338,65 +341,69 @@ fi
 cd llvm-project/llvm
 
 PROJECTS="clang;lld"
-if [ -n "$LLDB" ]; then
-    PROJECTS="$PROJECTS;lldb"
-fi
-if [ -n "$CLANG_TOOLS_EXTRA" ]; then
-    PROJECTS="$PROJECTS;clang-tools-extra"
-fi
-    if [ -n "$TOOLCHAIN_PREFIX" ]; then
-        TOOLCHAIN_PATH="$TOOLCHAIN_PREFIX/$toolchain"
+#if [ -n "$LLDB" ]; then
+#    PROJECTS="$PROJECTS;lldb"
+#fi
+#if [ -n "$CLANG_TOOLS_EXTRA" ]; then
+#    PROJECTS="$PROJECTS;clang-tools-extra"
+#fi
+
+LINK_FLAG="-Wl,${MIMALLOC_PATH} -L${PREFIX}/${toolchain}/lib" 
+COMMON_C_FLAG=" -I${PREFIX}/${toolchain}/include/c++/v1"
+
+CMAKE_BUILD_TYPE=Release
+MIDDLE=""
+BUILDDIR_BASE=$BUILDDIR
+for target in $TARGETS; do
+    BUILDDIR=$BUILDDIR_BASE_$target
+    if [ -n "$PGO_PRE" ]; then
+        CMAKE_BUILD_TYPE=RelWithDebInfo
+        LLVM_PROFDATA_FILE_OPTION=""
+        MIDDLE="_pre"
+        if [ -z "$TARGET_WINDOWS" ]; then
+            COMMON_C_FLAG="${COMMON_C_FLAG} -fprofile-instr-generate=~/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw"
+        else
+            COMMON_C_FLAG="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw"
+        fi
     else
-        TOOLCHAIN_PATH="$PREFIX/$toolchain"
-    fi
-    # if TOOLCHAIN_PATH is exist
-    if [ -d "$TOOLCHAIN_PATH" ]; then
-        LINK_FLAG="${LINK_FLAG} -Wl,${MIMALLOC_PATH},-L${TOOLCHAIN_PATH}/lib" 
-        COMMON_C_FLAG=" -I${TOOLCHAIN_PATH}/include/c++/v1"
-    else
-        LINK_FLAG="${LINK_FLAG} -Wl,${MIMALLOC_PATH}" 
-        COMMON_C_FLAG=""   
+        LLVM_PROFDATA_FILE_OPTION="-DLLVM_PROFDATA_FILE=/build/prof/${$target}/profdata.prof"
+        echo "LLVM_PROFDATA_FILE_OPTION=$LLVM_PROFDATA_FILE_OPTION"
     fi
     [ -z "$CLEAN" ] || rm -rf $BUILDDIR
     mkdir -p $BUILDDIR
+    echo "Building $target in $BUILDDIR"
     cd $BUILDDIR
     [ -n "$NO_RECONF" ] || rm -rf CMake*
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
-        -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}${MIDDLE}_$target" \
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+        ${LLVM_PROFDATA_FILE_OPTION} \
         -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
         -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
         -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
         -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
-        -DCMAKE_C_COMPILER_WORKS=1 \
-        -DCMAKE_CXX_COMPILER_WORKS=1 \
         -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
         -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
-        -DLLVM_TARGETS_TO_BUILD="X86" \
+        -DLLVM_TARGETS_TO_BUILD=$target \
         -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
         -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
-        -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
         ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
         $CMAKEFLAGS \
         ..
 
+    # -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
+    # -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    # echo -DCMAKE_C_FLAGS="-fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" -DCMAKE_CXX_FLAGS="-fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" -DCMAKE_ASM_FLAGS="-fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw"
+    # echo -DCMAKE_C_FLAGS="-fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time:~0,2%_%time:~3,2%_%time:~6,5%-m.profraw" -DCMAKE_CXX_FLAGS="-fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time:~0,2%_%time:~3,2%_%time:~6,5%-m.profraw" -DCMAKE_ASM_FLAGS="-fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time:~0,2%_%time:~3,2%_%time:~6,5%-m.profraw"
+
+    # llvm-profdata merge -output=C:/dev/llvm_pgo_profile/pgo_gen/profdata.prof C:/dev/llvm_pgo_profile/*.profraw
+    # -DLLVM_PROFDATA_FILE=/build/profdata.prof
+    
     cmake --build . ${CORES:+-j${CORES}}
     cmake --install . --strip
+    cp ../LICENSE.TXT $PREFIX
+    cd ..
+done
 
-cp ../LICENSE.TXT $PREFIX\
-cd ..
 
-# https://maskray.me/blog/2021-12-19-why-isnt-ld.lld-faster >> DCMAKE_EXE_LINKER_FLAGS, COMMON_C_FLAG
-# https://microsoft.github.io/mimalloc/overrides.html 
-# env LD_PRELOAD=./lib/libmimalloc.so myprogram\
-# ./x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a
-# ./i686-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a
-#
-# /MD or /MDd
-# include mimalloc-override.h (it was mimalloc-override.dll)
-# include mimalloc-new-delete.h for c++ new/delete
-# 9,3:   mi_version();       // ensure mimalloc library is linked
-# /INCLUDE:mi_version >> in clang >> -Wl,--undefined=mi_version
-# x64: ./x86_64-w64-mingw32/bin/mimalloc-redirect.dll ./x86_64-w64-mingw32/lib/libmimalloc.dll.a ./x86_64-w64-mingw32/bin/libmimalloc.dll
-# x86: ./i686-w64-mingw32/bin/mimalloc-redirect32.dll ./i686-w64-mingw32/lib/libmimalloc.dll.a ./i686-w64-mingw32/bin/libmimalloc.dll
