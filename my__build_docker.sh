@@ -8,3 +8,9 @@ sudo docker build -t llvm-mingw-my1-linux-env -f Dockerfile.my1-linux-env .
 sudo docker build -t llvm-mingw-my2-base -f Dockerfile.my2-base .
 # sudo docker container run  -v $(pwd):/build/llvm-mingw  -v $(pwd)/../build:/build/build -it llvm-mingw-my2-base bash
 sudo docker build -t llvm-mingw-my3 -f Dockerfile.my3 .
+# sudo docker container run  -v $(pwd):/build/llvm-mingw  -v $(pwd)/../build:/build/build -it llvm-mingw-my3 bash
+sudo docker system prune -f
+sudo docker build -t llvm-mingw-my3-linux -f Dockerfile.my3-linux .
+# sudo docker container run  -v $(pwd):/build/llvm-mingw  -v $(pwd)/../build:/build/build -it llvm-mingw-my3-linux bash
+sudo docker system prune -f
+#sudo docker image save  llvm-mingw-my3-linux | tqdm --bytes --total $(sudo docker image inspect llvm-mingw-my3-linux --format='{{.Size}}') > llvm.tar

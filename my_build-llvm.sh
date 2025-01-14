@@ -85,6 +85,21 @@ if [ -z "$CHECKOUT_ONLY" ]; then
     PREFIX="$(cd "$PREFIX" && pwd)"
 fi
 
+
+if [ -n "$HOST" ]; then
+    case $HOST in
+    *-mingw32)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+else
+    case $(uname) in
+    MINGW*)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+fi
+
 mkdir -p "$PREFIX"
 if [ -n "$USE_EXISTING_COMPILER" ]; then
     if [ -n "$TARGET_WINDOWS" ]; then
@@ -138,19 +153,6 @@ fi
 
 [ -z "$CHECKOUT_ONLY" ] || exit 0
 
-if [ -n "$HOST" ]; then
-    case $HOST in
-    *-mingw32)
-        TARGET_WINDOWS=1
-        ;;
-    esac
-else
-    case $(uname) in
-    MINGW*)
-        TARGET_WINDOWS=1
-        ;;
-    esac
-fi
 
 if command -v ninja >/dev/null; then
     CMAKE_GENERATOR="Ninja"
@@ -336,7 +338,7 @@ if [ -n "$FULL_LLVM" ]; then
 fi
 
 cd llvm-project/llvm
-
+LINK_FLAG="$LINK_FLAG -Wl,--threads=8"
 PROJECTS="clang;lld"
 if [ -n "$LLDB" ]; then
     PROJECTS="$PROJECTS;lldb"

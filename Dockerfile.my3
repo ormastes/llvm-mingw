@@ -1,18 +1,34 @@
 FROM llvm-mingw-my2-base:latest
 
+
+ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
+ARG CFGUARD_ARGS=--enable-cfguard
+COPY my_build_mimalloc.sh ./
+ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-w64-mingw32 
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=i686-w64-mingw32
+ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-linux-gnu
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=i686-linux-gnu
+RUN cp -rf /opt/llvm-linux/x86_64-linux-gnu/lib/* /opt/llvm-mingw/x86_64-linux-gnu/lib/
+RUN cp -rf /opt/llvm-linux/i686-linux-gnu/lib/* /opt/llvm-mingw/i686-linux-gnu/lib/
+RUN cp -rf /opt/llvm-mingw/x86_64-linux-gnu/lib/* /opt/llvm-linux/x86_64-linux-gnu/lib/
+RUN cp -rf /opt/llvm-mingw/i686-linux-gnu/lib/* /opt/llvm-linux/i686-linux-gnu/lib/
+
+
 COPY ./my_build-llvm_pgo.sh ./
+
 
 ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
 # --host-arch=x86-64-v3 --host-arch=x86-64-v4 --host-tune=intel > -march=cpu-type -mtune=cpu-type
-RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre --compiler_for_each_arch --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-pre --lto 
-# ./my_build-llvm_pgo.sh /build/Windows_pgo --compiler_for_each_arch ---host-arch=x86-64-v3 --host-tune=intel -host=x86_64-w64-mingw32 --pgo-post --lto
-RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre32 --compiler_for_each_arch --host-arch=i686 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-pre --lto 
-# ./my_build-llvm_pgo.sh /build/Windows_pgo32 --compiler_for_each_arch ---host-arch=i686 --host-tune=intel -host=x86_64-w64-mingw32 --pgo-post --lto
-RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre_one --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-pre --lto 
-# ./my_build-llvm_pgo.sh /build/Windows_pgo_one ---host-arch=x86-64-v3 --host-tune=intel -host=x86_64-w64-mingw32 --pgo-post --lto
-RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre_one32 --host-arch=i686 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-pre --lto 
-# ./my_build-llvm_pgo.sh /build/Windows_pgo_one32 ---host-arch=i686 --host-tune=intel -host=x86_64-w64-mingw32 --pgo-post --lto
-
-ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
-ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre_one  --use-exsting-compiler --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-pre --lto 
+# ./my_build-llvm_pgo.sh /build/Windows_pgo_one  --use-exsting-compiler --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-post --lto
+RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre  --use-exsting-compiler --compiler_for_each_arch --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-pre --lto 
+# ./my_build-llvm_pgo.sh /build/Windows_pgo  --use-exsting-compiler --compiler_for_each_arch --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-w64-mingw32 --pgo-post --lto
+RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre_one32  --use-exsting-compiler --host-arch=i686 --host-tune=intel --host=i686-w64-mingw32 --pgo-pre --lto 
+# ./my_build-llvm_pgo.sh /build/Windows_pgo_one32  --use-exsting-compiler --host-arch=i686 --host-tune=intel --host=i686-w64-mingw32 --pgo-post --lto
+RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre32  --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel --host=i686-w64-mingw32 --pgo-pre --lto 
+# ./my_build-llvm_pgo.sh /build/Windows_pgo32  --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel -host=i686-w64-mingw32 --pgo-post --lto

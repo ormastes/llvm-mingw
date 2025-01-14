@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright (c) 2018 Martin Storsjo
 #
@@ -24,7 +24,6 @@ LINK_DYLIB=ON
 ASSERTSSUFFIX=""
 LLDB=ON
 CLANG_TOOLS_EXTRA=ON
-COMPILER_FOR_EACH_ARCH=0
 PGO_PRE=0
 PGO_POST=0
 
@@ -80,6 +79,9 @@ while [ $# -gt 0 ]; do
     --pgo-post)
         PGO_POST=1
         ;;
+    --use-exsting-compiler)
+        USE_EXISTING_COMPILER=1
+        ;;
     --disable-clang-tools-extra)
         unset CLANG_TOOLS_EXTRA
         ;;
@@ -99,6 +101,33 @@ if [ -z "$CHECKOUT_ONLY" ]; then
     mkdir -p "$PREFIX"
     PREFIX="$(cd "$PREFIX" && pwd)"
 fi
+
+if [ -n "$HOST" ]; then
+    case $HOST in
+    *-mingw32)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+else
+    case $(uname) in
+    MINGW*)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+fi
+
+mkdir -p "$PREFIX"
+if [ -n "$USE_EXISTING_COMPILER" ]; then
+    if [ -n "$TARGET_WINDOWS" ]; then
+        NATIVE_PREFIX=/opt/llvm-mingw
+    else
+        NATIVE_PREFIX=/opt/llvm-linux
+    fi
+else
+    NATIVE_PREFIX=$PREFIX
+fi
+NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
+export PATH="$NATIVE_PREFIX/bin:$PATH"
 
 if [ ! -d llvm-project ]; then
     mkdir llvm-project
@@ -140,19 +169,6 @@ fi
 
 [ -z "$CHECKOUT_ONLY" ] || exit 0
 
-if [ -n "$HOST" ]; then
-    case $HOST in
-    *-mingw32)
-        TARGET_WINDOWS=1
-        ;;
-    esac
-else
-    case $(uname) in
-    MINGW*)
-        TARGET_WINDOWS=1
-        ;;
-    esac
-fi
 
 if command -v ninja >/dev/null; then
     CMAKE_GENERATOR="Ninja"
@@ -173,7 +189,7 @@ if [ -n "$COMPILER_FOR_EACH_ARCH" ]; then
     TARGETS=$TARGETS
 else
     # strip and replace ' ' with ';'
-    TARGETS=$(echo $TARGETS | xargs)
+    TARGETS="${TARGETS// /;}"
 fi
 
 CMAKEFLAGS="$LLVM_CMAKEFLAGS"
@@ -276,17 +292,18 @@ if [ -n "$TARGET_WINDOWS" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
-    MIMALLOC_PATH="/opt/llvm-mingw/x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a"
-    toolchain=x86_64-w64-mingw32
+    MIMALLOC_PATH="/opt/llvm-mingw/${HOST}/lib/mimalloc-2.1/libmimalloc-static.a"
+    #toolchain=x86_64-w64-mingw32
 else
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_RTLIB=compiler-rt"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_UNWINDLIB=libunwind"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     #CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
-    MIMALLOC_PATH="/opt/llvm-mingw/lib/mimalloc-2.1/libmimalloc.a"
-    toolchain=x86_64-linux-gnu
+    MIMALLOC_PATH="/opt/llvm-linux/${HOST}/lib/mimalloc-2.1/libmimalloc.a"
+    #toolchain=x86_64-linux-gnu
 fi
+toolchain=$HOST
 MIMALLOC_INCLUDE_PATH=/opt/llvm-mingw/include/mimalloc-2.1
 
 if [ -n "$LTO" ]; then
@@ -348,14 +365,15 @@ PROJECTS="clang;lld"
 #    PROJECTS="$PROJECTS;clang-tools-extra"
 #fi
 
-LINK_FLAG="-Wl,${MIMALLOC_PATH} -L${PREFIX}/${toolchain}/lib" 
-COMMON_C_FLAG=" -I${PREFIX}/${toolchain}/include/c++/v1"
+LINK_FLAG="-Wl,${MIMALLOC_PATH} -Wl,--threads=4 -L${NATIVE_PREFIX}/${toolchain}/lib" 
+COMMON_C_FLAG=" -I${NATIVE_PREFIX}/${toolchain}/include/c++/v1"
 
 CMAKE_BUILD_TYPE=Release
 MIDDLE=""
 BUILDDIR_BASE=$BUILDDIR
 for target in $TARGETS; do
-    BUILDDIR=$BUILDDIR_BASE_$target
+    target_text="${target//;/_}"
+    BUILDDIR=${BUILDDIR_BASE}_${target_text}
     if [ -n "$PGO_PRE" ]; then
         CMAKE_BUILD_TYPE=RelWithDebInfo
         LLVM_PROFDATA_FILE_OPTION=""
@@ -366,7 +384,7 @@ for target in $TARGETS; do
             COMMON_C_FLAG="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw"
         fi
     else
-        LLVM_PROFDATA_FILE_OPTION="-DLLVM_PROFDATA_FILE=/build/prof/${$target}/profdata.prof"
+        LLVM_PROFDATA_FILE_OPTION="-DLLVM_PROFDATA_FILE=/build/prof/${$target_text}/profdata.prof"
         echo "LLVM_PROFDATA_FILE_OPTION=$LLVM_PROFDATA_FILE_OPTION"
     fi
     [ -z "$CLEAN" ] || rm -rf $BUILDDIR
@@ -374,9 +392,10 @@ for target in $TARGETS; do
     echo "Building $target in $BUILDDIR"
     cd $BUILDDIR
     [ -n "$NO_RECONF" ] || rm -rf CMake*
+
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
-        -DCMAKE_INSTALL_PREFIX="${PREFIX}${MIDDLE}_$target" \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}${MIDDLE}_$target_text" \
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
         ${LLVM_PROFDATA_FILE_OPTION} \
         -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
@@ -400,10 +419,13 @@ for target in $TARGETS; do
     # llvm-profdata merge -output=C:/dev/llvm_pgo_profile/pgo_gen/profdata.prof C:/dev/llvm_pgo_profile/*.profraw
     # -DLLVM_PROFDATA_FILE=/build/profdata.prof
     
+    #cmake --build . --target clang --target lld ${CORES:+-j${CORES}}
+    #cmake --build . --target install-clang --target install-lld 
     cmake --build . ${CORES:+-j${CORES}}
-    cmake --install . --strip
+    cmake --install . --strip # for --strip >> -DCMAKE_EXE_LINKER_FLAGS="-s" \
     cp ../LICENSE.TXT $PREFIX
     cd ..
+
 done
 
 

@@ -59,7 +59,7 @@ if [ -n "$USE_EXISTING_COMPILER" ]; then
         NATIVE_PREFIX=/opt/llvm-linux
     fi
 else
-NATIVE_PREFIX=$PREFIX
+    NATIVE_PREFIX=$PREFIX
 fi
 NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
 export PATH="$NATIVE_PREFIX/bin:$PATH"
@@ -125,11 +125,11 @@ if [ -n "$HOST" ]; then
     *-mingw32)
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_RC_COMPILER=$HOST-windres"
-        toolchain=$HOST
+        toolchain=x86_64-w64-mingw32
         ;;
     *-linux*)
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
-        toolchain=$HOST
+        toolchain=x86_64-linux-gnu
         ;;
     *)
         echo "Unrecognized host $HOST"
@@ -137,6 +137,7 @@ if [ -n "$HOST" ]; then
         ;;
     esac
 fi
+
 CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH=$LLVM_DIR"
 CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER"
 CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY"
@@ -172,17 +173,17 @@ cd lldb-mi
 mkdir -p $BUILDDIR
 cd $BUILDDIR
 [ -n "$NO_RECONF" ] || rm -rf CMake*
-echo "current directory: $(pwd)"
-    TOOLCHAIN_PATH="$NATIVE_PREFIX/$toolchain"
-    echo "TOOLCHAIN_PATH=$TOOLCHAIN_PATH"
-    # if TOOLCHAIN_PATH is exist
-    if [ -d "$TOOLCHAIN_PATH" ]; then
-        LINK_FLAG="-Wl,-L${TOOLCHAIN_PATH}/lib" 
-        COMMON_C_FLAG="-stdlib=libc++ -isystem ${TOOLCHAIN_PATH}/include/c++/v1"
-    else
-        LINK_FLAG="" 
-        COMMON_C_FLAG=""   
-    fi
+echo "current    directory: $(pwd)"
+TOOLCHAIN_PATH="$PREFIX/$toolchain"
+echo "TOOLCHAIN_PATH=$TOOLCHAIN_PATH"
+# if TOOLCHAIN_PATH is exist
+if [ -d "$TOOLCHAIN_PATH" ]; then
+    LINK_FLAG="-Wl,-L${PREFIX}/${toolchain}/lib" 
+    COMMON_C_FLAG="-stdlib=libc++ -isystem ${PREFIX}/${toolchain}/include/c++/v1"
+else
+    LINK_FLAG="" 
+    COMMON_C_FLAG=""   
+fi
 cmake \
     ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \

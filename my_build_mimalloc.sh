@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright (c) 2018 Martin Storsjo
 #
@@ -73,6 +73,19 @@ if [ -z "$PREFIX" ]; then
     exit 1
 fi
 
+if [ -n "$HOST_ARGS" ]; then
+    case $HOST_ARGS in
+    *-mingw32)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+else
+    case $(uname) in
+    MINGW*)
+        TARGET_WINDOWS=1
+        ;;
+    esac
+fi
 mkdir -p "$PREFIX"
 PREFIX="$(cd "$PREFIX" && pwd)"
 
@@ -88,10 +101,10 @@ fi
 NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
 export PATH="$NATIVE_PREFIX/bin:$PATH"
 
-ARCHS="i686 x86_64"
+
 #: ${ARCHS:=${TOOLCHAIN_ARCHS-i686 x86_64 armv7 aarch64}}
 #: ${TARGET:=${TOOL_CHAIN_TARGET--w64-mingw32 -linux-gnu}}
-
+toolchain=$HOST_ARGS
 
 LLVM_PATH="llvm-project/llvm"
 
@@ -114,8 +127,22 @@ CMAKEFLAGS=
 
 
 cd mimalloc
+if [[ $HOST_ARGS == i686* ]]; then
+    LINK_FLAG="$LINK_FLAG -m32 "
+    COMMON_C_FLAG="$COMMON_C_FLAG -m32 "
+    arch="i686"
+else
+    LINK_FLAG="$LINK_FLAG "
+    COMMON_C_FLAG="$COMMON_C_FLAG  "
+    arch="x86_64"
+fi
 
-for arch in $ARCHS; do
+
+TOOLCHAIN_PATH="$NATIVE_PREFIX/$toolchain"
+
+LINK_FLAG="${LINK_FLAG} -Wl,-L${TOOLCHAIN_PATH}/lib" 
+        COMMON_C_FLAG="${COMMON_C_FLAG} -I${TOOLCHAIN_PATH}/include/c++/v1"
+
     case $HOST_ARGS in
         *-mingw32)
             CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
@@ -141,11 +168,15 @@ for arch in $ARCHS; do
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$PREFIX$TOOLCHAIN_DIR" \
-        -DCMAKE_C_COMPILER=${TOOLCHAIN_PREFIX}gcc \
-        -DCMAKE_CXX_COMPILER=${TOOLCHAIN_PREFIX}g++ \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX/$HOST_ARGS" \
+        -DCMAKE_C_COMPILER=${TOOLCHAIN_PREFIX}clang \
+        -DCMAKE_CXX_COMPILER=${TOOLCHAIN_PREFIX}clang++ \
         -DCMAKE_CXX_COMPILER_TARGET=$TOOLCHAIN_TARGET \
         ${CMAKEFLAGS} \
+        -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
         -DCMAKE_C_COMPILER_WORKS=TRUE \
         -DCMAKE_CXX_COMPILER_WORKS=TRUE \
         -DLLVM_PATH="$LLVM_PATH" \
@@ -156,5 +187,5 @@ for arch in $ARCHS; do
     cmake --build . ${CORES:+-j${CORES}}
     cmake --install .
     cd ..
-done
+
 cd ..

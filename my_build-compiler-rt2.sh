@@ -70,9 +70,6 @@ if [ -n "$HOST" ]; then
     *-mingw32)
         TARGET_WINDOWS=1
         ;;
-    *-unknown-elf)
-        TARGET_WINDOWS=1
-        ;;
     esac
 else
     case $(uname) in
@@ -89,7 +86,11 @@ PREFIX="$(cd "$PREFIX" && pwd)"
 
 ANY_ARCH=$(echo $ARCHS | awk '{print $1}')
 if [ -n "$USE_EXISTING_COMPILER" ]; then
-    NATIVE_PREFIX=/opt/llvm-mingw
+    if [ -n "$TARGET_WINDOWS" ]; then
+        NATIVE_PREFIX=/opt/llvm-mingw
+    else
+        NATIVE_PREFIX=/opt/llvm-linux
+    fi
 else
     NATIVE_PREFIX=$PREFIX
 fi
@@ -156,7 +157,6 @@ for arch in $ARCHS; do
         esac
     fi
     TOOLCHAIN_PATH="$NATIVE_PREFIX/$toolchain"
-    echo "TOOLCHAIN_PATH=$TOOLCHAIN_PATH"
     # if TOOLCHAIN_PATH is exist
     if [ -d "$TOOLCHAIN_PATH" ]; then
         OPTIONNAL_FLAGS="$OPTIONNAL_FLAGS -DCMAKE_SHARED_LINKER_FLAGS=-L$NATIVE_PREFIX/$toolchain/lib -DCMAKE_FIND_ROOT_PATH=$NATIVE_PREFIX/$toolchain -DCMAKE_C_COMPILER=$toolchain-clang -DCMAKE_CXX_COMPILER=$toolchain-clang++"
@@ -181,9 +181,9 @@ for arch in $ARCHS; do
         fi
     fi
     
-    [ -z "$CLEAN" ] || rm -rf build-$toolchain$BUILD_SUFFIX
-    mkdir -p build-$toolchain$BUILD_SUFFIX
-    cd build-$toolchain$BUILD_SUFFIX
+    [ -z "$CLEAN" ] || rm -rf build-$arch$BUILD_SUFFIX
+    mkdir -p build-$arch$BUILD_SUFFIX
+    cd build-$arch$BUILD_SUFFIX
     [ -n "$NO_RECONF" ] || rm -rf CMake*
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
@@ -214,11 +214,10 @@ for arch in $ARCHS; do
     cmake --install . --prefix "${WORKDIR}/install"
     mkdir -p "$PREFIX/$toolchain/bin"
     if [ -n "$SANITIZERS" ]; then
-        if [ -n "$TARGET_WINDOWS" ]; then
-            mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.dll "$PREFIX/$toolchain/bin"
-        else
-            mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.so "$PREFIX/$toolchain/bin"
-        fi
+    if [ -n "$TARGET_WINDOWS" ]; then
+        mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.dll "$PREFIX/$toolchain/bin"
+    fi
+        mv "${WORKDIR}/install/lib/$CMAKE_SYSTEM_NAME/"*.so "$PREFIX/$toolchain/bin"
     fi
     cd ..
 done
