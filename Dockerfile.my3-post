@@ -1,6 +1,4 @@
-FROM llvm-mingw-my2.1-32:latest
-#FROM llvm-mingw-my2-base:latest
-
+FROM llvm-mingw-my3:latest
 
 
 COPY ./my_build-llvm_pgo.sh ./
@@ -10,7 +8,7 @@ ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
 # --host-arch=x86-64-v3 --host-arch=x86-64-v4 --host-tune=intel > -march=cpu-type -mtune=cpu-type
 
-RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre32  --disable-dylib --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel --host=i686-w64-mingw32 --pgo-pre --lto
+#RUN ./my_build-llvm_pgo.sh /build/win_pgo_pre32  --disable-dylib --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel --host=i686-w64-mingw32 --pgo-pre --lto
 #--lto 
 # ./my_build-llvm_pgo.sh /build/Windows_pgo32  --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel -host=i686-w64-mingw32 --pgo-post --lto
 
@@ -26,7 +24,7 @@ COPY ./my_build-llvm_pgo.sh ./
 ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
 
-RUN ./my_build-llvm_pgo.sh /build/lin_pgo_pre32 --disable-dylib --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel --host=i686-linux-gnu --pgo-pre --lto
+#RUN ./my_build-llvm_pgo.sh /build/lin_pgo_pre32 --disable-dylib --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel --host=i686-linux-gnu --pgo-pre --lto
 # ./my_build-llvm_pgo.sh /build/Linux_pgo32  --use-exsting-compiler --compiler_for_each_arch --host-arch=i686 --host-tune=intel --host=i686-linux-gnu --pgo-post --lto
 
 
@@ -37,3 +35,7 @@ RUN ./my_build-llvm_pgo.sh /build/lin_pgo_pre32 --disable-dylib --use-exsting-co
 # ./my_build-llvm_pgo.sh /build/Linux_pgo_one  --use-exsting-compiler --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-linux-gnu --pgo-post --lto
 #RUN ./my_build-llvm_pgo.sh /build/lin_pgo_pre --use-exsting-compiler --compiler_for_each_arch --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-linux-gnu --pgo-pre 
 # ./my_build-llvm_pgo.sh /build/Linux_pgo  --use-exsting-compiler --compiler_for_each_arch --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-linux-gnu --pgo-post --lto
+
+
+#RUN rm -rf /build/llvm-project/llvm/build*
+

@@ -374,31 +374,28 @@ BUILDDIR_BASE=$BUILDDIR
 for target in $TARGETS; do
     target_text="${target//;/_}"
     BUILDDIR=${BUILDDIR_BASE}_${target_text}
-    if [ -n "$PGO_PRE" ]; then
-        CMAKE_BUILD_TYPE=RelWithDebInfo
-        LLVM_PROFDATA_FILE_OPTION=""
-        MIDDLE="_pre"
-        if [ -z "$TARGET_WINDOWS" ]; then
-            COMMON_C_FLAG="${COMMON_C_FLAG} -fprofile-instr-generate=~/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw"
-        else
-            COMMON_C_FLAG="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw"
-        fi
-    else
-        LLVM_PROFDATA_FILE_OPTION="-DLLVM_PROFDATA_FILE=/build/prof/${$target_text}/profdata.prof"
-        echo "LLVM_PROFDATA_FILE_OPTION=$LLVM_PROFDATA_FILE_OPTION"
-    fi
+    
+
     [ -z "$CLEAN" ] || rm -rf $BUILDDIR
     mkdir -p $BUILDDIR
     echo "Building $target in $BUILDDIR"
     cd $BUILDDIR
     [ -n "$NO_RECONF" ] || rm -rf CMake*
 
-    cmake \
-        ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
+        
+    if [ -n "$PGO_PRE" ]; then
+        CMAKE_BUILD_TYPE=RelWithDebInfo
+        LLVM_PROFDATA_FILE_OPTION=""
+        MIDDLE="_pre"
+        if [ -z "$TARGET_WINDOWS" ]; then
+            cmake   ${FINAL_CMAKE_PARAM}    \
+                -DCMAKE_C_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=~/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" \
+                -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=~/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" \
+                -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=~/dev/llvm_pgo_profile/pgo_gen/code-%p-%time%-m.profraw" \
+                ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
         -DCMAKE_INSTALL_PREFIX="${PREFIX}${MIDDLE}_$target_text" \
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
         ${LLVM_PROFDATA_FILE_OPTION} \
-        -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
         -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
         -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
         -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
@@ -409,7 +406,51 @@ for target in $TARGETS; do
         -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
         ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
         $CMAKEFLAGS \
-        ..
+                ..
+        else
+            cmake   ${FINAL_CMAKE_PARAM}    \
+                -DCMAKE_C_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%TIME%-m.profraw" \
+                -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%TIME%-m.profraw" \
+                -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG} -fprofile-instr-generate=C:/dev/llvm_pgo_profile/pgo_gen/code-%p-%TIME%-m.profraw" \
+                ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}${MIDDLE}_$target_text" \
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+        ${LLVM_PROFDATA_FILE_OPTION} \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
+        -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
+        -DLLVM_TARGETS_TO_BUILD=$target \
+        -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
+        -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
+        ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
+        $CMAKEFLAGS \
+                ..
+        fi
+    else
+         cmake   ${FINAL_CMAKE_PARAM}    \
+                -DCMAKE_C_FLAGS="${COMMON_C_FLAG} -DLLVM_PROFDATA_FILE=/build/prof/${$target_text}/profdata.prof" \
+                -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG} -DLLVM_PROFDATA_FILE=/build/prof/${$target_text}/profdata.prof" \
+                -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}  -DLLVM_PROFDATA_FILE=/build/prof/${$target_text}/profdata.prof" \
+                ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}${MIDDLE}_$target_text" \
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+        ${LLVM_PROFDATA_FILE_OPTION} \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
+        -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
+        -DLLVM_TARGETS_TO_BUILD=$target \
+        -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
+        -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
+        ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
+        $CMAKEFLAGS \
+                ..
+
+        echo "LLVM_PROFDATA_FILE_OPTION=$LLVM_PROFDATA_FILE_OPTION"
+    fi
 
     # -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
     # -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -419,11 +460,11 @@ for target in $TARGETS; do
     # llvm-profdata merge -output=C:/dev/llvm_pgo_profile/pgo_gen/profdata.prof C:/dev/llvm_pgo_profile/*.profraw
     # -DLLVM_PROFDATA_FILE=/build/profdata.prof
     
-    #cmake --build . --target clang --target lld ${CORES:+-j${CORES}}
-    #cmake --build . --target install-clang --target install-lld 
-    cmake --build . ${CORES:+-j${CORES}}
-    cmake --install . --strip # for --strip >> -DCMAKE_EXE_LINKER_FLAGS="-s" \
-    cp ../LICENSE.TXT $PREFIX
+    cmake --build . --target clang --target lld ${CORES:+-j${CORES}}
+    cmake --build . --target install-clang --target install-lld 
+    #cmake --build . ${CORES:+-j${CORES}}
+    #cmake --install . --strip # for --strip >> -DCMAKE_EXE_LINKER_FLAGS="-s" \
+    cp -f ../LICENSE.TXT $BUILDDIR
     cd ..
 
 done

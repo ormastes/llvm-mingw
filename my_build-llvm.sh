@@ -386,7 +386,7 @@ fi
     cmake --build . ${CORES:+-j${CORES}}
     cmake --install . --strip
 
-cp ../LICENSE.TXT $PREFIX\
+cp -f ../LICENSE.TXT $PREFIX
 cd ..
 
 # https://maskray.me/blog/2021-12-19-why-isnt-ld.lld-faster >> DCMAKE_EXE_LINKER_FLAGS, COMMON_C_FLAG
