@@ -1,7 +1,7 @@
 FROM llvm-mingw-my2.1-32:latest
 #FROM llvm-mingw-my2-base:latest
 
-
+WORKDIR /build
 
 COPY ./my_build-llvm_pgo.sh ./
 
@@ -37,3 +37,7 @@ RUN ./my_build-llvm_pgo.sh /build/lin_pgo_pre32 --disable-dylib --use-exsting-co
 # ./my_build-llvm_pgo.sh /build/Linux_pgo_one  --use-exsting-compiler --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-linux-gnu --pgo-post --lto
 #RUN ./my_build-llvm_pgo.sh /build/lin_pgo_pre --use-exsting-compiler --compiler_for_each_arch --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-linux-gnu --pgo-pre 
 # ./my_build-llvm_pgo.sh /build/Linux_pgo  --use-exsting-compiler --compiler_for_each_arch --host-arch=x86-64-v3 --host-tune=intel --host=x86_64-linux-gnu --pgo-post --lto
+
+
+RUN rm -r mingw-w64/
+RUN rm -r lldb-mi/

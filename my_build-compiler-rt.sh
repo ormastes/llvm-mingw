@@ -164,7 +164,7 @@ for arch in $ARCHS; do
         COMMON_C_FLAG="-fPIC -I${NATIVE_PREFIX}/${toolchain}/include/c++/v1"
         if [ -z "$TARGET_WINDOWS" ]; then
             COMMON_C_FLAG="${COMMON_C_FLAG} -isystem /usr/include"
-            COMPILER_RT_BUILD_LIBFUZZER=ON
+            COMPILER_RT_BUILD_LIBFUZZER=OFF
         else
             COMPILER_RT_BUILD_LIBFUZZER=ON
         fi

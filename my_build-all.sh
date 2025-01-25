@@ -21,7 +21,7 @@ LLVM_ARGS=""
 MINGW_ARGS=""
 CFGUARD_ARGS="--enable-cfguard"
 HOST_ARGS=""
-
+MINGW_DYLIB_ARGS="--enable-shared"
 while [ $# -gt 0 ]; do
     case "$1" in
     --enable-asserts)
@@ -38,6 +38,7 @@ while [ $# -gt 0 ]; do
         ;;
     --disable-dylib)
         LLVM_ARGS="$LLVM_ARGS $1"
+        MINGW_DYLIB_ARGS=""
         ;;
     --disable-lldb)
         LLVM_ARGS="$LLVM_ARGS $1"
@@ -91,6 +92,7 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+MINGW_ARGS="$MINGW_ARGS $MINGW_DYLIB_ARGS"
 if [ -z "$PREFIX" ]; then
     echo "$0 [--host-clang[=clang]] [--enable-asserts] [--disable-dylib] [--full-llvm] [--with-python] [--disable-lldb] [--disable-lldb-mi] [--disable-clang-tools-extra] [--host=triple] [--with-default-win32-winnt=0x601] [--with-default-msvcrt=ucrt] [--enable-cfguard|--disable-cfguard] [--build-linux] [--no-runtimes] [--no-tools] [--wipe-runtimes] [--clean-runtimes] dest"
     exit 1
@@ -141,13 +143,15 @@ if [ -n "$CLEAN_RUNTIMES" ]; then
     export CLEAN=1
 fi
 if [ -z "$BUILD_LINUX" ]; then
-echo "./build-mingw-w64.sh ${PREFIX} ${HOST_ARGS} ${CFGUARD_ARGS}"
-./build-mingw-w64.sh $PREFIX $MINGW_ARGS $CFGUARD_ARGS
+echo "./my_build-mingw-w64.sh ${PREFIX} ${MINGW_ARGS} ${CFGUARD_ARGS}"
+./my_build-mingw-w64.sh $PREFIX $MINGW_ARGS $CFGUARD_ARGS
 fi
 echo "./my_build-compiler-rt.sh ${PREFIX} --use-exsting-compiler ${HOST_ARGS} ${CFGUARD_ARGS}"
 ./my_build-compiler-rt.sh $PREFIX --use-exsting-compiler $HOST_ARGS $CFGUARD_ARGS
+
 echo "./my_build-libcxx.sh ${PREFIX} --use-exsting-compiler ${HOST_ARGS} ${CFGUARD_ARGS}"
 ./my_build-libcxx.sh $PREFIX --use-exsting-compiler $HOST_ARGS $CFGUARD_ARGS
+
 if [ -z "$BUILD_LINUX" ]; then
 echo "./my_build-mingw-w64-libraries.sh ${PREFIX} ${CFGUARD_ARGS}"
 ./my_build-mingw-w64-libraries.sh $PREFIX $CFGUARD_ARGS
