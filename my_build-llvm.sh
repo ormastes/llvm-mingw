@@ -172,18 +172,19 @@ CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
 if [ -n "$HOST" ]; then
     ARCH="${HOST%%-*}"
+    echo "ARCH = $ARCH"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-g++"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_PROCESSOR=$ARCH"
     case $HOST in
     *-mingw32)
-        toolchain=$arch-w64-mingw32
+        toolchain=$ARCH-w64-mingw32
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Windows"
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_RC_COMPILER=$HOST-windres"
         CROSS_ROOT=$(cd $(dirname $(command -v $HOST-gcc))/../$HOST && pwd)
         ;;
     *-linux*)
-        toolchain=$arch-linux-gnu
+        toolchain=$ARCH-linux-gnu
         LINK_FLAG="-Wl,-lc++,-lc++abi,-lunwind,-latomic"
         GCC_NAME=gcc
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
@@ -278,7 +279,7 @@ if [ -n "$TARGET_WINDOWS" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
     MIMALLOC_PATH="/opt/llvm-mingw/x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a"
-    toolchain=x86_64-w64-mingw32
+    #toolchain=x86_64-w64-mingw32
 else
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_RTLIB=compiler-rt"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_UNWINDLIB=libunwind"
@@ -286,7 +287,7 @@ else
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     #CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
     MIMALLOC_PATH="/opt/llvm-mingw/lib/mimalloc-2.1/libmimalloc.a"
-    toolchain=x86_64-linux-gnu
+    #toolchain=x86_64-linux-gnu
 fi
 MIMALLOC_INCLUDE_PATH=/opt/llvm-mingw/include/mimalloc-2.1
 
@@ -343,6 +344,7 @@ PROJECTS="clang;lld"
 if [ -n "$LLDB" ]; then
     PROJECTS="$PROJECTS;lldb"
 fi
+echo "TOOLCHAIN_PREFIX = $TOOLCHAIN_PREFIX, toolchain = $toolchain"
 if [ -n "$CLANG_TOOLS_EXTRA" ]; then
     PROJECTS="$PROJECTS;clang-tools-extra"
 fi
@@ -362,6 +364,25 @@ fi
     [ -z "$CLEAN" ] || rm -rf $BUILDDIR
     mkdir -p $BUILDDIR
     cd $BUILDDIR
+    echo cmake \
+        ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
+        -DCMAKE_EXE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_SHARED_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_MODULE_LINKER_FLAGS="${LINK_FLAG}" \
+        -DCMAKE_C_COMPILER_WORKS=1 \
+        -DCMAKE_CXX_COMPILER_WORKS=1 \
+        -DLLVM_ENABLE_ASSERTIONS=$ASSERTS \
+        -DLLVM_ENABLE_PROJECTS="$PROJECTS" \
+        -DLLVM_TARGETS_TO_BUILD="X86" \
+        -DLLVM_INSTALL_TOOLCHAIN_ONLY=$TOOLCHAIN_ONLY \
+        -DLLVM_LINK_LLVM_DYLIB=$LINK_DYLIB \
+        -DLLVM_TOOLCHAIN_TOOLS="llvm-ar;llvm-ranlib;llvm-objdump;llvm-rc;llvm-cvtres;llvm-nm;llvm-strings;llvm-readobj;llvm-dlltool;llvm-pdbutil;llvm-objcopy;llvm-strip;llvm-cov;llvm-profdata;llvm-addr2line;llvm-symbolizer;llvm-windres;llvm-ml;llvm-readelf;llvm-size;llvm-cxxfilt" \
+        ${HOST+-DLLVM_HOST_TRIPLE=$HOST} \
+        $CMAKEFLAGS \
+        ..
     [ -n "$NO_RECONF" ] || rm -rf CMake*
     cmake \
         ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \

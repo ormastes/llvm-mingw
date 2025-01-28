@@ -9,10 +9,8 @@ COPY ./my_build-mingw-w64.sh  ./my_build-all.sh  ./my_build-llvm.sh ./my_build-l
 ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
 
-RUN ./my_build-all.sh /build/Win32 --host=i686-w64-mingw32                                   
-RUN ./my_build-llvm.sh /build/Win32Static --disable-dylib --host=i686-w64-mingw32
-
-RUN cp -rf /build/Win32/i686-w64-mingw32/bin/* /build/Win32/bin/
+RUN ./my_build-all.sh /build/WinMG32 --host=i686-w64-mingw32                                   
+RUN ./my_build-llvm.sh /build/WinMG32Static --disable-dylib --host=i686-w64-mingw32
 
 ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
@@ -21,6 +19,7 @@ RUN ./my_build-all.sh /build/Lin32 --host=i686-linux-gnu --disable-cfguard --bui
 RUN ./my_build-llvm.sh /build/Lin32Static --use-exsting-compiler --disable-dylib --host=i686-linux-gnu
 
 RUN cp -rf /build/Lin32/i686-linux-gnu/bin/* /build/Lin32/bin/
+RUN cp -rf /build/llvm-project/llvm/build-i686-linux-gnu/lib/*.so* /build/Lin32/bin/
 
 
                                                                 

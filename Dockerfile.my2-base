@@ -5,6 +5,8 @@ COPY wrappers/*.sh wrappers/*.c wrappers/*.h ./wrappers/
 COPY ./my_build-mingw-w64.sh ./my_build-all.sh  ./my_build-llvm.sh ./my_build-lldb-mi.sh ./strip-llvm.sh ./install-wrappers.sh ./build-mingw-w64-tools.sh ./build-mingw-w64.sh \
     ./my_build-compiler-rt.sh ./my_build-libcxx.sh ./my_build-mingw-w64-libraries.sh ./my_build-openmp.sh ./my_build_mimalloc.sh ./
 
+COPY my__build_pack.sh ./
+
 ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 ARG CFGUARD_ARGS=--enable-cfguard
 COPY my_build_mimalloc.sh ./
@@ -25,10 +27,10 @@ RUN cp -rf /opt/llvm-mingw/i686-linux-gnu/lib/* /opt/llvm-linux/i686-linux-gnu/l
 ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
 
-RUN ./my_build-all.sh /build/Win64 --host=x86_64-w64-mingw32
-RUN ./my_build-llvm.sh /build/Win64Static --disable-dylib --host=x86_64-w64-mingw32
+RUN ./my_build-all.sh /build/WinMG64 --host=x86_64-w64-mingw32
+RUN ./my_build-llvm.sh /build/WinMG64Static --disable-dylib --host=x86_64-w64-mingw32
 
-RUN cp -rf /build/Win64/x86_64-w64-mingw32/bin/* /build/Win64/bin/
+RUN cp -rf /build/WinMG64/x86_64-w64-mingw32/bin/* /build/WinMG64/bin/
 
 ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
@@ -37,6 +39,6 @@ RUN ./my_build-all.sh /build/Lin64 --host=x86_64-linux-gnu --disable-cfguard --b
 RUN ./my_build-llvm.sh /build/Lin64Static --use-exsting-compiler --disable-dylib --host=x86_64-linux-gnu
 
 RUN cp -rf /build/Lin64/x86_64-linux-gnu/bin/* /build/Lin64/bin/
-
+RUN cp -rf /build/llvm-project/llvm/build-x86_64-linux-gnu/lib/*.so* /build/Lin64/bin/
 
 

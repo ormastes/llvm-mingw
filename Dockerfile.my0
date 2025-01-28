@@ -1,9 +1,9 @@
 FROM llvm-mingw:latest
 
-
-RUN dpkg --add-architecture i386 && apt-get update -qq && \
-    DEBIAN_FRONTEND="noninteractive" apt-get install -qqy --no-install-recommends \
-    tmux gcc-multilib build-essential python3-pip && \
+RUN apt-get clean -y && rm -rf /var/lib/apt/lists/* 
+RUN dpkg --add-architecture i386 && apt-get update -qqy
+RUN DEBIAN_FRONTEND="noninteractive" apt-get install -qqy --no-install-recommends \
+    tmux gcc-multilib g++-multilib  libstdc++-11-dev:i386 build-essential python3-pip && \
     apt-get clean -y && \
     rm -rf /var/lib/apt/lists/*
 
