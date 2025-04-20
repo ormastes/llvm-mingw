@@ -162,5 +162,5 @@ if [ -z "$BUILD_LINUX" ]; then
 echo "./build-openmp.sh ${PREFIX} ${CFGUARD_ARGS} "
 ./build-openmp.sh $PREFIX $CFGUARD_ARGS
 fi
-echo "my_build_mimalloc ${PREFIX} --use-exsting-compiler ${CFGUARD_ARGS}"
-./my_build_mimalloc.sh $PREFIX  --use-exsting-compiler $CFGUARD_ARGS
+#echo "my_build_mimalloc ${PREFIX} --use-exsting-compiler ${CFGUARD_ARGS}"
+#./my_build_mimalloc.sh $PREFIX  --use-exsting-compiler $CFGUARD_ARGS

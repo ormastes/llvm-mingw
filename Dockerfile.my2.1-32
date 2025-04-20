@@ -3,8 +3,20 @@ FROM llvm-mingw-my2-base:latest
 WORKDIR /build
 COPY wrappers/*.sh wrappers/*.c wrappers/*.h ./wrappers/
 COPY ./my_build-mingw-w64.sh  ./my_build-all.sh  ./my_build-llvm.sh ./my_build-lldb-mi.sh ./strip-llvm.sh ./install-wrappers.sh ./build-mingw-w64-tools.sh ./build-mingw-w64.sh \
-    ./my_build-compiler-rt.sh ./my_build-libcxx.sh ./my_build-mingw-w64-libraries.sh ./my_build-openmp.sh ./my_build_mimalloc.sh ./
+    ./my_build-compiler-rt.sh ./my_build-libcxx.sh ./my_build-mingw-w64-libraries.sh ./my_build-openmp.sh  ./
 
+# temp fix for missing 32 libraries
+RUN cp -rf /opt/llvm-linux/i686-linux-gnu/lib/*.a /usr/lib32/
+RUN cp -rf /opt/llvm-linux/i686-linux-gnu/lib/*.so* /usr/lib32/
+    
+
+ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+
+RUN ./my_build-all.sh /build/Lin32 --host=i686-linux-gnu --disable-cfguard --build-linux
+RUN ./my_build-llvm.sh /build/Lin32Static --disable-dylib  --use-exsting-compiler --host=i686-linux-gnu
+
+RUN cp -rf /build/Lin32/i686-linux-gnu/bin/* /build/Lin32/bin/
 
 ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
 ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
@@ -12,14 +24,15 @@ ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
 RUN ./my_build-all.sh /build/WinMG32 --host=i686-w64-mingw32                                   
 RUN ./my_build-llvm.sh /build/WinMG32Static --disable-dylib --host=i686-w64-mingw32
 
-ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
-ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+RUN cp -rf /build/WinMG32/i686-w64-mingw32/bin/* /build/WinMG32/bin/
 
-RUN ./my_build-all.sh /build/Lin32 --host=i686-linux-gnu --disable-cfguard --build-linux --host-clang=/opt/llvm-linux/bin/i686-linux-gnu-clang
-RUN ./my_build-llvm.sh /build/Lin32Static --use-exsting-compiler --disable-dylib --host=i686-linux-gnu
 
-RUN cp -rf /build/Lin32/i686-linux-gnu/bin/* /build/Lin32/bin/
+RUN cp -rf /build/llvm-project/llvm/build-i686-w64-mingw32/bin/*.dll /build/WinMG32/bin/
 RUN cp -rf /build/llvm-project/llvm/build-i686-linux-gnu/lib/*.so* /build/Lin32/bin/
 
+
+ 
+COPY my__build_pack.sh ./
+RUN ./my__build_pack.sh
 
                                                                 

@@ -1,0 +1,30 @@
+FROM llvm-mingw-my1-linux-env:latest
+
+
+COPY ./my_build_mimalloc.sh ./
+ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
+ARG CFGUARD_ARGS=--enable-cfguard
+COPY my_build_mimalloc.sh ./
+ENV TOOLCHAIN_PREFIX=/opt/llvm-mingw
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-w64-mingw32 
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=i686-w64-mingw32
+ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
+ENV PATH=$TOOLCHAIN_PREFIX/bin:$ORG_PATH
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-linux-gnu
+RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=i686-linux-gnu
+RUN cp -rf /opt/llvm-linux/x86_64-linux-gnu/lib/* /opt/llvm-mingw/x86_64-linux-gnu/lib/
+RUN cp -rf /opt/llvm-linux/i686-linux-gnu/lib/* /opt/llvm-mingw/i686-linux-gnu/lib/
+RUN cp -rf /opt/llvm-mingw/x86_64-linux-gnu/lib/* /opt/llvm-linux/x86_64-linux-gnu/lib/
+RUN cp -rf /opt/llvm-mingw/i686-linux-gnu/lib/* /opt/llvm-linux/i686-linux-gnu/lib/
+
+RUN cp -rf /opt/llvm-linux/i686-linux-gnu/lib/*.a /usr/lib32/
+RUN cp -rf /opt/llvm-linux/i686-linux-gnu/lib/*.so* /usr/lib32/
+RUN cp -rf /opt/llvm-linux/x86_64-linux-gnu/lib/*.a /usr/lib/
+RUN cp -rf /opt/llvm-linux/x86_64-linux-gnu/lib/*.so* /usr/lib/
+
+WORKDIR /build
+
+#RUN cd llvm-project && git pull
+ENV LLVM_VERSION=private/ormastes_current
+RUN cd llvm-project && git fetch --depth 1 origin ${LLVM_VERSION} && git switch ${LLVM_VERSION}

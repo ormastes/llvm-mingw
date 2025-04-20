@@ -1,4 +1,4 @@
-FROM llvm-mingw-my0:latest
+FROM llvm-mingw-my00:latest
 
 WORKDIR /build
 

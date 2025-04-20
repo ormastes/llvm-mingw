@@ -10,9 +10,10 @@ RUN dpkg --add-architecture i386 && apt-get update -qq && \
 
 RUN dpkg --add-architecture i386 && apt-get update -qq && \
     DEBIAN_FRONTEND="noninteractive" apt-get install -qqy --no-install-recommends \
-    libstdc++6:i386 libc6-dev-i386 linux-libc-dev:i386 libncurses-dev:i386 tmux  && \
+    libstdc++6:i386 libc6-dev-i386 linux-libc-dev:i386 libncurses-dev:i386 tmux && \
     apt-get clean -y && \
     rm -rf /var/lib/apt/lists/*
+
 
 
 RUN git config --global user.name "LLVM MinGW" && \
@@ -52,7 +53,5 @@ RUN ./build-mingw-w64-libraries.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 RUN ./build-compiler-rt.sh $TOOLCHAIN_PREFIX --build-sanitizers 
 RUN ./build-openmp.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
 
-COPY my_build_mimalloc.sh ./
-RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS --host=x86_64-w64-mingw32 
-RUN ./my_build_mimalloc.sh $TOOLCHAIN_PREFIX $CFGUARD_ARGS
+
 

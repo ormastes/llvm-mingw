@@ -85,6 +85,7 @@ if [ -z "$CHECKOUT_ONLY" ]; then
     PREFIX="$(cd "$PREFIX" && pwd)"
 fi
 
+CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
 if [ -n "$HOST" ]; then
     case $HOST in
@@ -104,14 +105,21 @@ mkdir -p "$PREFIX"
 if [ -n "$USE_EXISTING_COMPILER" ]; then
     if [ -n "$TARGET_WINDOWS" ]; then
         NATIVE_PREFIX=/opt/llvm-mingw
+        CMAKEFLAGS="$CMAKEFLAGS -DLLVM_ENABLE_LIBCXX=ON -DCMAKE_INSTALL_LIBDIR=lib -DHAVE_CXX_ATOMICS_WITHOUT_LIB=ON -DHAVE_CXX_ATOMICS64_WITHOUT_LIB=ON -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON -DCOMPILER_RT_ENABLE_ATOMIC=ON"
     else
         NATIVE_PREFIX=/opt/llvm-linux
+        CMAKEFLAGS="$CMAKEFLAGS -DLLVM_ENABLE_LIBCXX=ON -DCMAKE_INSTALL_LIBDIR=lib -DHAVE_CXX_ATOMICS_WITHOUT_LIB=ON -DHAVE_CXX_ATOMICS64_WITHOUT_LIB=ON -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON -DCOMPILER_RT_ENABLE_ATOMIC=ON"
     fi
+    ARCH="${HOST%%-*}"
+    ATOMIC_LIB=-lclang_rt.builtins-$ARCH
 else
     NATIVE_PREFIX=$PREFIX
+    ATOMIC_LIB=-latomic
 fi
 NATIVE_PREFIX="$(cd "$NATIVE_PREFIX" && pwd)"
 export PATH="$NATIVE_PREFIX/bin:$PATH"
+echo "NATIVE_PREFIX = $NATIVE_PREFIX"
+echo "PREFIX = $PREFIX"
 
 if [ ! -d llvm-project ]; then
     mkdir llvm-project
@@ -168,9 +176,14 @@ else
     esac
 fi
 
-CMAKEFLAGS="$LLVM_CMAKEFLAGS"
 
-if [ -n "$HOST" ]; then
+if [ -n "$STAGE2" ]; then
+    # Build using an earlier built and installed clang in the target directory
+    export PATH="$PREFIX/bin:$PATH"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-clang"
+    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-clang++"
+    CMAKEFLAGS="$CMAKEFLAGS -DLLVM_USE_LINKER=lld"
+elif [ -n "$HOST" ]; then
     ARCH="${HOST%%-*}"
     echo "ARCH = $ARCH"
     CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-gcc"
@@ -185,7 +198,7 @@ if [ -n "$HOST" ]; then
         ;;
     *-linux*)
         toolchain=$ARCH-linux-gnu
-        LINK_FLAG="-Wl,-lc++,-lc++abi,-lunwind,-latomic"
+        LINK_FLAG="-Wl,-lc++,-lc++abi,-lunwind,${ATOMIC_LIB}"
         GCC_NAME=gcc
         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_SYSTEM_NAME=Linux"
         CROSS_ROOT=$(cd $(dirname $(command -v gcc)) && pwd)
@@ -247,12 +260,6 @@ if [ -n "$HOST" ]; then
         CMAKEFLAGS="$CMAKEFLAGS -DPython3_INCLUDE_DIRS=$PYTHON_INCLUDE_DIR"
         CMAKEFLAGS="$CMAKEFLAGS -DPython3_LIBRARIES=$PYTHON_LIB"
     fi
-elif [ -n "$STAGE2" ]; then
-    # Build using an earlier built and installed clang in the target directory
-    export PATH="$PREFIX/bin:$PATH"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_C_COMPILER=$HOST-clang"
-    CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_CXX_COMPILER=$HOST-clang++"
-    CMAKEFLAGS="$CMAKEFLAGS -DLLVM_USE_LINKER=lld"
 else
     # Native compilation with the system default compiler.
 
@@ -278,8 +285,7 @@ if [ -n "$TARGET_WINDOWS" ]; then
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
-    #MIMALLOC_PATH="/opt/llvm-mingw/x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a"
-    MIMALLOC_PATH="$TOOLCHAIN_PREFIX/$toolchain/lib/libmimalloc.a"
+    MIMALLOC_PATH="/opt/llvm-mingw/x86_64-w64-mingw32/lib/mimalloc-2.1/libmimalloc-static.a"
     #toolchain=x86_64-w64-mingw32
 else
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_RTLIB=compiler-rt"
@@ -287,8 +293,7 @@ else
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_CXX_STDLIB=libc++"
     CMAKEFLAGS="$CMAKEFLAGS -DCLANG_DEFAULT_LINKER=lld"
     #CMAKEFLAGS="$CMAKEFLAGS -DLLD_DEFAULT_LD_LLD_IS_MINGW=ON"
-    #MIMALLOC_PATH="/opt/llvm-mingw/lib/mimalloc-2.1/libmimalloc.a"
-    MIMALLOC_PATH="$TOOLCHAIN_PREFIX/$toolchain/lib/libmimalloc.a"
+    MIMALLOC_PATH="/opt/llvm-mingw/lib/mimalloc-2.1/libmimalloc.a"
     #toolchain=x86_64-linux-gnu
 fi
 MIMALLOC_INCLUDE_PATH=/opt/llvm-mingw/include/mimalloc-2.1
@@ -357,14 +362,12 @@ fi
     fi
     # if TOOLCHAIN_PATH is exist
     if [ -d "$TOOLCHAIN_PATH" ]; then
-        LINK_FLAG="${LINK_FLAG} -Wl,-L${TOOLCHAIN_PATH}/lib" 
-        COMMON_C_FLAG=" -I${TOOLCHAIN_PATH}/include/c++/v1" 
-    fi
-
-    if [ -d "$MIMALLOC_PATH" ]; then
+        LINK_FLAG="${LINK_FLAG} -Wl,${MIMALLOC_PATH},-L${TOOLCHAIN_PATH}/lib" 
+        COMMON_C_FLAG=" -I${TOOLCHAIN_PATH}/include/c++/v1"
+    else
         LINK_FLAG="${LINK_FLAG} -Wl,${MIMALLOC_PATH}" 
+        COMMON_C_FLAG=""   
     fi
-
     [ -z "$CLEAN" ] || rm -rf $BUILDDIR
     mkdir -p $BUILDDIR
     cd $BUILDDIR
@@ -389,7 +392,7 @@ fi
         ..
     [ -n "$NO_RECONF" ] || rm -rf CMake*
     cmake \
-        ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" -DCMAKE_VERBOSE_MAKEFILE=ON \
+        ${CMAKE_GENERATOR+-G} "$CMAKE_GENERATOR" \
         -DCMAKE_INSTALL_PREFIX="$PREFIX" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_FLAGS="${COMMON_C_FLAG}" -DCMAKE_CXX_FLAGS="${COMMON_C_FLAG}" -DCMAKE_ASM_FLAGS="${COMMON_C_FLAG}" \
