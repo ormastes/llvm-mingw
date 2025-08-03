@@ -27,3 +27,25 @@
 *.tar.bz2
 *.o
 **/*.o
+
+# Binary files
+*.dll
+*.exe
+*.so
+*.dylib
+*.a
+*.lib
+**/*.dll
+**/*.exe
+**/*.so
+**/*.dylib
+**/*.a
+**/*.lib
+
+# Docker artifacts
+*.img
+*.qcow2
+*.vdi
+*.vmdk
+*.vhd
+*.vhdx
