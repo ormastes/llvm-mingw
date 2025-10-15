@@ -4,7 +4,7 @@ WORKDIR /build
 
 ENV TOOLCHAIN_PREFIX=/opt/llvm-linux
 
-ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64"
+ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64
 
 ARG DEFAULT_CRT=
 
@@ -19,7 +19,7 @@ ENV HOST_ARG=--host=riscv32-unknown-elf
 COPY my_build-compiler-rt.sh ./
 RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX --use-exsting-compiler --disable-cfguard $HOST_ARG
 
-ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64"
+ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64
 ENV HOST_ARG=--host=x86_64-linux-gnu
 #RUN ./build-mingw-w64.sh $TOOLCHAIN_PREFIX --with-default-msvcrt=$DEFAULT_CRT 
 #RUN ./build-mingw-w64-tools.sh $TOOLCHAIN_PREFIX
@@ -38,7 +38,7 @@ RUN ./strip-llvm.sh $TOOLCHAIN_PREFIX $HOST_ARG
 RUN ./install-wrappers.sh $TOOLCHAIN_PREFIX 
 
 
-ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64"
+ARG TOOLCHAIN_ARCHS="i686 x86_64" # armv7 aarch64
 RUN cp /opt/llvm-linux/x86_64-linux-gnu/lib/* /opt/llvm-linux/lib
 RUN ./my_build-compiler-rt.sh $TOOLCHAIN_PREFIX --disable-cfguard $HOST_ARG --build-sanitizers 
 #RUN ./build-openmp.sh $TOOLCHAIN_PREFIX 
